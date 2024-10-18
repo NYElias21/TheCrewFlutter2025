@@ -1,0 +1,1192 @@
+import 'package:flutter/material.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:carousel_slider/carousel_slider.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:google_maps_flutter/google_maps_flutter.dart';
+import 'profile_page.dart';
+import 'package:flutter/services.dart';
+import 'dart:ui' as ui;
+
+
+class PostDetailPage extends StatefulWidget {
+  final DocumentSnapshot post;
+
+  PostDetailPage({required this.post});
+
+  @override
+  _PostDetailPageState createState() => _PostDetailPageState();
+}
+
+class _PostDetailPageState extends State<PostDetailPage> {
+  bool isFollowing = false;
+  int _currentImageIndex = 0;
+  late String currentUserId;
+  late String postUserId;
+  Map<String, Timestamp> _likedPosts = {};
+  Map<String, Timestamp> _savedPosts = {};
+  int likes = 0;
+  TextEditingController _commentController = TextEditingController();
+  FocusNode _commentFocusNode = FocusNode();
+  List<Comment> comments = [];
+
+  @override
+  void initState() {
+    super.initState();
+    currentUserId = FirebaseAuth.instance.currentUser!.uid;
+    postUserId = widget.post['userId'];
+    likes = widget.post['likes'] ?? 0;
+    _checkIfFollowing();
+    _loadLikedAndSavedPosts();
+    _loadComments();
+  }
+
+  @override
+  void dispose() {
+    _commentFocusNode.dispose();
+    _commentController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _checkIfFollowing() async {
+    DocumentSnapshot userDoc = await FirebaseFirestore.instance
+        .collection('users')
+        .doc(currentUserId)
+        .get();
+    
+    List<String> following = List<String>.from(userDoc['following'] ?? []);
+    setState(() {
+      isFollowing = following.contains(postUserId);
+    });
+  }
+
+Future<void> _loadLikedAndSavedPosts() async {
+  DocumentSnapshot userDoc = await FirebaseFirestore.instance
+      .collection('users')
+      .doc(currentUserId)
+      .get();
+
+  setState(() {
+    var data = userDoc.data() as Map<String, dynamic>?;
+    
+    if (data != null) {
+      var likedPosts = data['likedPosts'];
+      if (likedPosts is Map) {
+        _likedPosts = Map<String, Timestamp>.from(likedPosts);
+      } else if (likedPosts is List) {
+        _likedPosts = Map.fromIterable(
+          likedPosts,
+          key: (item) => item as String,
+          value: (item) => Timestamp.now(),
+        );
+      } else {
+        _likedPosts = {};
+      }
+
+      var savedPosts = data['savedPosts'];
+      if (savedPosts is Map) {
+        _savedPosts = Map<String, Timestamp>.from(savedPosts);
+      } else if (savedPosts is List) {
+        _savedPosts = Map.fromIterable(
+          savedPosts,
+          key: (item) => item as String,
+          value: (item) => Timestamp.now(),
+        );
+      } else {
+        _savedPosts = {};
+      }
+    } else {
+      _likedPosts = {};
+      _savedPosts = {};
+    }
+  });
+}
+
+  bool isLiked(String postId) {
+    return _likedPosts.containsKey(postId);
+  }
+
+  bool isSaved(String postId) {
+    return _savedPosts.containsKey(postId);
+  }
+
+  Future<void> _toggleLike(String postId) async {
+    DocumentReference userRef = FirebaseFirestore.instance.collection('users').doc(currentUserId);
+    DocumentReference postRef = FirebaseFirestore.instance.collection('posts').doc(postId);
+
+    bool liked = _likedPosts.containsKey(postId);
+    if (liked) {
+      _likedPosts.remove(postId);
+      await userRef.update({
+        'likedPosts.$postId': FieldValue.delete()
+      });
+      await postRef.update({
+        'likes': FieldValue.increment(-1)
+      });
+      setState(() {
+        likes--;
+      });
+    } else {
+      _likedPosts[postId] = Timestamp.now();
+      await userRef.update({
+        'likedPosts.$postId': FieldValue.serverTimestamp()
+      });
+      await postRef.update({
+        'likes': FieldValue.increment(1)
+      });
+      setState(() {
+        likes++;
+      });
+    }
+
+    setState(() {});
+  }
+
+  Future<void> _toggleSave(String postId) async {
+    DocumentReference userRef = FirebaseFirestore.instance.collection('users').doc(currentUserId);
+
+    bool saved = _savedPosts.containsKey(postId);
+    if (saved) {
+      _savedPosts.remove(postId);
+      await userRef.update({
+        'savedPosts.$postId': FieldValue.delete()
+      });
+    } else {
+      _savedPosts[postId] = Timestamp.now();
+      await userRef.update({
+        'savedPosts.$postId': FieldValue.serverTimestamp()
+      });
+    }
+
+    setState(() {});
+  }
+
+  Future<void> _toggleFollow() async {
+    setState(() {
+      isFollowing = !isFollowing;
+    });
+
+    DocumentReference currentUserRef = FirebaseFirestore.instance.collection('users').doc(currentUserId);
+    DocumentReference postUserRef = FirebaseFirestore.instance.collection('users').doc(postUserId);
+
+    if (isFollowing) {
+      await currentUserRef.update({
+        'following': FieldValue.arrayUnion([postUserId])
+      });
+      await postUserRef.update({
+        'followers': FieldValue.arrayUnion([currentUserId])
+      });
+    } else {
+      await currentUserRef.update({
+        'following': FieldValue.arrayRemove([postUserId])
+      });
+      await postUserRef.update({
+        'followers': FieldValue.arrayRemove([currentUserId])
+      });
+    }
+  }
+
+  Widget _buildUserAvatar(String photoUrl, {double radius = 20}) {
+    return CircleAvatar(
+      radius: radius,
+      backgroundColor: Colors.grey[300],
+      backgroundImage: photoUrl.isNotEmpty ? NetworkImage(photoUrl) : null,
+      child: photoUrl.isEmpty
+          ? Icon(Icons.person, size: radius * 1.2, color: Colors.grey[600])
+          : null,
+    );
+  }
+
+  void _navigateToProfile(BuildContext context, String userId) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => ProfilePage(userId: userId),
+      ),
+    );
+  }
+
+void _sharePost() {
+  String caption = '';
+  bool isGroupActivity = false;
+
+  showDialog(
+    context: context,
+    builder: (BuildContext context) {
+      return StatefulBuilder(
+        builder: (context, setState) {
+          return Dialog(
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(20),
+            ),
+            child: Container(
+              padding: EdgeInsets.all(20),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Share this post',
+                    style: TextStyle(
+                      fontSize: 20,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  SizedBox(height: 20),
+                  TextField(
+                    onChanged: (value) {
+                      caption = value;
+                    },
+                    decoration: InputDecoration(
+                      hintText: 'Add a caption...',
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(10),
+                        borderSide: BorderSide(color: Colors.grey[300]!),
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(10),
+                        borderSide: BorderSide(color: Colors.blue),
+                      ),
+                    ),
+                    maxLines: 3,
+                  ),
+                  SizedBox(height: 20),
+                  Row(
+                    children: [
+                      Checkbox(
+                        value: isGroupActivity,
+                        onChanged: (value) {
+                          setState(() {
+                            isGroupActivity = value!;
+                          });
+                        },
+                      ),
+                      Text('Allow friends to join group'),
+                    ],
+                  ),
+                  SizedBox(height: 20),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.end,
+                    children: [
+                      TextButton(
+                        child: Text('Cancel'),
+                        onPressed: () {
+                          Navigator.of(context).pop();
+                        },
+                      ),
+                      SizedBox(width: 10),
+                      ElevatedButton(
+                        child: Text('Share'),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.blue,
+                          foregroundColor: Colors.white,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(20),
+                          ),
+                        ),
+                        onPressed: () {
+                          _saveSharedPost(caption, isGroupActivity);
+                          Navigator.of(context).pop();
+                        },
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          );
+        },
+      );
+    },
+  );
+}
+
+void _saveSharedPost(String caption, bool isGroupActivity) async {
+  try {
+    final data = widget.post.data() as Map<String, dynamic>;
+    String groupId = '';
+
+    if (isGroupActivity) {
+      // Create a new group document
+      DocumentReference groupRef = await FirebaseFirestore.instance.collection('groups').add({
+        'title': data['title'],
+        'description': data['description'],
+        'imageUrls': data['imageUrls'],
+        'members': [FirebaseAuth.instance.currentUser!.uid],
+        'createdAt': FieldValue.serverTimestamp(),
+      });
+      groupId = groupRef.id;
+    }
+
+    final sharedPostData = {
+      'originalPostId': widget.post.id,
+      'sharedBy': FirebaseAuth.instance.currentUser!.uid,
+      'caption': caption,
+      'timestamp': FieldValue.serverTimestamp(),
+      'title': data['title'],
+      'description': data['description'],
+      'imageUrls': data['imageUrls'],
+      'postType': data['postType'],
+      'itinerary': data['itinerary'],
+      'isGroupActivity': isGroupActivity,
+      'groupId': isGroupActivity ? groupId : null,
+      'groupMembers': isGroupActivity ? [FirebaseAuth.instance.currentUser!.uid] : [],
+      'likes': 0,
+      'comments': 0,
+      'isCompleted': false,  // Add this line
+    };
+
+    await FirebaseFirestore.instance.collection('social_posts').add(sharedPostData);
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('Post shared successfully!')),
+    );
+  } catch (e) {
+    print('Error sharing post: $e');
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('Error sharing post. Please try again.')),
+    );
+  }
+}
+
+  Future<void> _loadComments() async {
+    QuerySnapshot commentSnapshot = await FirebaseFirestore.instance
+        .collection('posts')
+        .doc(widget.post.id)
+        .collection('comments')
+        .orderBy('timestamp', descending: true)
+        .get();
+
+    setState(() {
+      comments = commentSnapshot.docs
+          .map((doc) => Comment.fromDocument(doc))
+          .toList();
+    });
+  }
+
+  Future<void> _addComment() async {
+    if (_commentController.text.isNotEmpty) {
+      DocumentReference commentRef = await FirebaseFirestore.instance
+          .collection('posts')
+          .doc(widget.post.id)
+          .collection('comments')
+          .add({
+        'userId': currentUserId,
+        'username': await _getUsernameById(currentUserId),
+        'text': _commentController.text,
+        'timestamp': FieldValue.serverTimestamp(),
+      });
+
+      DocumentSnapshot commentDoc = await commentRef.get();
+      setState(() {
+        comments.insert(0, Comment.fromDocument(commentDoc));
+        _commentController.clear();
+      });
+    }
+  }
+
+  Future<String> _getUsernameById(String userId) async {
+    DocumentSnapshot userDoc = await FirebaseFirestore.instance
+        .collection('users')
+        .doc(userId)
+        .get();
+    return userDoc['username'] ?? 'Unknown User';
+  }
+
+  Future<Set<Marker>> _createNumberedMarkers(List<dynamic> itinerary) async {
+    Set<Marker> markers = {};
+    int markerNumber = 1;
+
+    for (var day in itinerary) {
+      for (var activity in day['activities']) {
+        if (activity['location'] != null) {
+          GeoPoint location = activity['location'];
+          LatLng latLng = LatLng(location.latitude, location.longitude);
+
+          final Uint8List markerIcon = await _getMarkerIcon(markerNumber);
+          
+          markers.add(Marker(
+            markerId: MarkerId('${activity['name']}'),
+            position: latLng,
+            icon: BitmapDescriptor.fromBytes(markerIcon),
+            infoWindow: InfoWindow(title: activity['name']),
+          ));
+
+          markerNumber++;
+        }
+      }
+    }
+
+    return markers;
+  }
+
+  Future<Uint8List> _getMarkerIcon(int number) async {
+    final ui.PictureRecorder pictureRecorder = ui.PictureRecorder();
+    final Canvas canvas = Canvas(pictureRecorder);
+    final Paint paint = Paint()..color = Colors.blue;
+    final TextPainter textPainter = TextPainter(
+      text: TextSpan(
+        text: number.toString(),
+        style: TextStyle(fontSize: 30, color: Colors.white, fontWeight: FontWeight.bold),
+      ),
+      textDirection: TextDirection.ltr,
+    );
+
+    canvas.drawCircle(Offset(24, 24), 24, paint);
+    textPainter.layout();
+    textPainter.paint(
+      canvas,
+      Offset(24 - textPainter.width / 2, 24 - textPainter.height / 2),
+    );
+
+    final img = await pictureRecorder.endRecording().toImage(48, 48);
+    final data = await img.toByteData(format: ui.ImageByteFormat.png);
+    return data!.buffer.asUint8List();
+  }
+
+  @override
+Widget build(BuildContext context) {
+    final data = widget.post.data() as Map<String, dynamic>;
+    List<String> imageUrls = List<String>.from(data['imageUrls'] ?? []);
+    String title = data['title'] ?? 'Title';
+    String username = data['username'] ?? 'Username';
+    String description = data['description'] ?? '';
+    String postType = data['postType'] ?? 'single';
+
+    return Scaffold(
+      body: Column(
+        children: [
+          _buildAppBar(context, username),
+          Expanded(
+            child: CustomScrollView(
+              slivers: [
+                SliverToBoxAdapter(
+                  child: _buildImageSection(imageUrls),
+                ),
+                SliverToBoxAdapter(
+                  child: _buildPostDetails(title, description, postType),
+                ),
+                SliverToBoxAdapter(
+                  child: _buildCommentSection(),
+                ),
+              ],
+            ),
+          ),
+          _buildCommentInput(),
+          _buildActionBar(),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildAppBar(BuildContext context, String username) {
+    return Container(
+      color: Colors.white,
+      child: SafeArea(
+        bottom: false,
+        child: Container(
+          height: 56,
+          padding: EdgeInsets.symmetric(horizontal: 16),
+          child: Row(
+            children: [
+              IconButton(
+                icon: Icon(Icons.arrow_back),
+                onPressed: () => Navigator.of(context).pop(),
+                padding: EdgeInsets.zero,
+                constraints: BoxConstraints(),
+              ),
+              SizedBox(width: 8),
+              GestureDetector(
+                onTap: () => _navigateToProfile(context, postUserId),
+                child: FutureBuilder<DocumentSnapshot>(
+                  future: FirebaseFirestore.instance.collection('users').doc(postUserId).get(),
+                  builder: (context, snapshot) {
+                    String userPhotoUrl = '';
+                    if (snapshot.hasData && snapshot.data != null) {
+                      userPhotoUrl = snapshot.data!['photoURL'] ?? '';
+                    }
+                    return _buildUserAvatar(userPhotoUrl, radius: 16);
+                  },
+                ),
+              ),
+              SizedBox(width: 8),
+              Expanded(
+                                child: GestureDetector(
+                  onTap: () => _navigateToProfile(context, postUserId),
+                  child: Text(
+                    username, 
+                    style: TextStyle(fontWeight: FontWeight.bold),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+              ),
+              if (currentUserId != postUserId)
+                ElevatedButton(
+                  onPressed: _toggleFollow,
+                  child: Text(isFollowing ? 'Following' : 'Follow'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: isFollowing ? Colors.grey : Colors.blue,
+                    foregroundColor: Colors.white,
+                    padding: EdgeInsets.symmetric(horizontal: 12, vertical: 0),
+                    minimumSize: Size(60, 30),
+                  ),
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildImageSection(List<String> imageUrls) {
+    if (imageUrls.isEmpty) {
+      return Container(
+        height: 300,
+        color: Colors.grey,
+        child: Icon(Icons.image, color: Colors.white, size: 100),
+      );
+    } else if (imageUrls.length == 1) {
+      return Image.network(
+        imageUrls[0],
+        width: double.infinity,
+        height: 300,
+        fit: BoxFit.cover,
+      );
+    } else {
+      return Stack(
+        children: [
+          CarouselSlider(
+            options: CarouselOptions(
+              height: 300.0,
+              viewportFraction: 1.0,
+              enlargeCenterPage: false,
+              onPageChanged: (index, reason) {
+                setState(() {
+                  _currentImageIndex = index;
+                });
+              },
+            ),
+            items: imageUrls.map((url) {
+              return Builder(
+                builder: (BuildContext context) {
+                  return Image.network(
+                    url,
+                    fit: BoxFit.cover,
+                    width: double.infinity,
+                  );
+                },
+              );
+            }).toList(),
+          ),
+          Positioned(
+            top: 10,
+            right: 10,
+            child: Container(
+              padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              decoration: BoxDecoration(
+                color: Colors.black.withOpacity(0.7),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Text(
+                '${_currentImageIndex + 1}/${imageUrls.length}',
+                style: TextStyle(color: Colors.white),
+              ),
+            ),
+          ),
+          Positioned(
+            bottom: 10,
+            left: 0,
+            right: 0,
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: imageUrls.asMap().entries.map((entry) {
+                return Container(
+                  width: 8.0,
+                  height: 8.0,
+                  margin: EdgeInsets.symmetric(horizontal: 4.0),
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: Colors.white.withOpacity(
+                      _currentImageIndex == entry.key ? 0.9 : 0.4,
+                    ),
+                  ),
+                );
+              }).toList(),
+            ),
+          ),
+        ],
+      );
+    }
+  }
+
+  Widget _buildPostDetails(String title, String description, String postType) {
+    final createdAt = widget.post['createdAt'] as Timestamp?;
+    return Padding(
+      padding: const EdgeInsets.all(16.0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            title,
+            style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+          ),
+          SizedBox(height: 8),
+          Text(
+            description.isNotEmpty ? description : 'No description available',
+            style: TextStyle(fontSize: 16),
+          ),
+          SizedBox(height: 16),
+          if (postType == 'itinerary')
+            _buildOverviewMap(),
+          if (postType == 'itinerary')
+            _buildItineraryDetails(),
+          SizedBox(height: 16),
+          Text(
+            _formatPostTime(createdAt ?? Timestamp.now()),
+            style: TextStyle(color: Colors.grey, fontSize: 14),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildOverviewMap() {
+    final data = widget.post.data() as Map<String, dynamic>;
+    final itinerary = data['itinerary'] as List<dynamic>?;
+
+    if (itinerary == null || itinerary.isEmpty) {
+      return SizedBox.shrink();
+    }
+
+    return FutureBuilder<Set<Marker>>(
+      future: _createNumberedMarkers(itinerary),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return CircularProgressIndicator();
+        }
+
+        if (snapshot.hasError) {
+          return Text('Error: ${snapshot.error}');
+        }
+
+        Set<Marker> markers = snapshot.data ?? {};
+        List<LatLng> points = markers.map((marker) => marker.position).toList();
+
+        if (points.isEmpty) {
+          return SizedBox.shrink();
+        }
+
+        LatLngBounds bounds = _calculateBounds(points);
+        LatLng center = _calculateCenter(bounds);
+
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Itinerary Overview',
+              style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+            ),
+            SizedBox(height: 8),
+            Container(
+              height: 200,
+              child: GoogleMap(
+                initialCameraPosition: CameraPosition(
+                  target: center,
+                  zoom: 10,
+                ),
+                markers: markers,
+                onMapCreated: (GoogleMapController controller) {
+                  controller.animateCamera(CameraUpdate.newLatLngBounds(bounds, 50));
+                },
+                zoomControlsEnabled: false,
+                mapToolbarEnabled: false,
+                myLocationButtonEnabled: false,
+              ),
+            ),
+            SizedBox(height: 16),
+          ],
+        );
+      },
+    );
+  }
+
+  LatLngBounds _calculateBounds(List<LatLng> points) {
+    double minLat = points[0].latitude;
+    double maxLat = points[0].latitude;
+    double minLng = points[0].longitude;
+    double maxLng = points[0].longitude;
+
+    for (LatLng point in points) {
+      if (point.latitude < minLat) minLat = point.latitude;
+      if (point.latitude > maxLat) maxLat = point.latitude;
+      if (point.longitude < minLng) minLng = point.longitude;
+      if (point.longitude > maxLng) maxLng = point.longitude;
+    }
+
+    return LatLngBounds(
+      southwest: LatLng(minLat, minLng),
+      northeast: LatLng(maxLat, maxLng),
+    );
+  }
+
+  LatLng _calculateCenter(LatLngBounds bounds) {
+    return LatLng(
+      (bounds.northeast.latitude + bounds.southwest.latitude) / 2,
+      (bounds.northeast.longitude + bounds.southwest.longitude) / 2,
+    );
+  }
+
+  Widget _buildItineraryDetails() {
+    final data = widget.post.data() as Map<String, dynamic>;
+    final itinerary = data['itinerary'] as List<dynamic>?;
+
+    if (itinerary == null || itinerary.isEmpty) {
+      return SizedBox.shrink();
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Itinerary',
+          style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+        ),
+        SizedBox(height: 8),
+        ...itinerary.asMap().entries.map((entry) {
+          final dayIndex = entry.key;
+          final day = entry.value as Map<String, dynamic>;
+          final activities = day['activities'] as List<dynamic>?;
+
+          if (activities == null || activities.isEmpty) {
+            return SizedBox.shrink();
+          }
+
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Day ${dayIndex + 1}',
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+              ),
+              ...activities.map((activity) {
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      activity['name'] ?? 'Unnamed Activity',
+                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                    ),
+                    SizedBox(height: 4),
+                    Text(activity['description'] ?? 'No description available'),
+                    if (activity['placeDescription'] != null)
+                      Text(
+                        'Location: ${activity['placeDescription']}',
+                        style: TextStyle(fontStyle: FontStyle.italic),
+                      ),
+                    SizedBox(height: 8),
+                  ],
+                );
+              }).toList(),
+              SizedBox(height: 16),
+            ],
+          );
+        }).toList(),
+      ],
+    );
+  }
+
+  Widget _buildLocationMap(GeoPoint location, String? placeDescription) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if (placeDescription != null)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 8.0),
+            child: Text(
+              'Location: $placeDescription',
+              style: TextStyle(fontStyle: FontStyle.italic),
+            ),
+          ),
+        Container(
+          height: 200,
+          child: GoogleMap(
+            initialCameraPosition: CameraPosition(
+              target: LatLng(location.latitude, location.longitude),
+              zoom: 14,
+            ),
+            markers: {
+              Marker(
+                markerId: MarkerId('activity_location'),
+                position: LatLng(location.latitude, location.longitude),
+              ),
+            },
+            zoomControlsEnabled: false,
+            mapToolbarEnabled: false,
+            myLocationButtonEnabled: false,
+          ),
+        ),
+      ],
+    );
+  }
+
+
+  String _formatPostTime(Timestamp timestamp) {
+    final now = DateTime.now();
+    final postTime = timestamp.toDate();
+    final difference = now.difference(postTime);
+
+    if (difference.inDays > 0) {
+      return '${postTime.month.toString().padLeft(2, '0')}/${postTime.day.toString().padLeft(2, '0')}/${postTime.year}';
+    } else if (difference.inHours > 0) {
+      return '${difference.inHours} hours ago';
+    } else if (difference.inMinutes > 0) {
+      return '${difference.inMinutes} minutes ago';
+    } else {
+      return 'Just now';
+    }
+  }
+
+Widget _buildCommentSection() {
+  return Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      Padding(
+        padding: const EdgeInsets.fromLTRB(16.0, 16.0, 16.0, 8.0),
+        child: Text(
+          '${comments.length} Comments',
+          style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+        ),
+      ),
+      ListView.builder(
+        shrinkWrap: true,
+        physics: NeverScrollableScrollPhysics(),
+        padding: EdgeInsets.zero,
+        itemCount: comments.length,
+        itemBuilder: (context, index) {
+          return _buildCommentItem(comments[index]);
+        },
+      ),
+    ],
+  );
+}
+
+Widget _buildCommentInput() {
+  return Container(
+    padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+    decoration: BoxDecoration(
+      border: Border(top: BorderSide(color: Colors.grey[300]!, width: 0.5)),
+    ),
+    child: Row(
+      children: [
+        Expanded(
+          child: TextField(
+            controller: _commentController,
+            focusNode: _commentFocusNode,
+            decoration: InputDecoration(
+              hintText: 'Say something...',
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(20),
+                borderSide: BorderSide(color: Colors.grey[300]!),
+              ),
+              contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              isDense: true,
+            ),
+            style: TextStyle(fontSize: 14),
+          ),
+        ),
+        SizedBox(width: 8),
+        GestureDetector(
+          onTap: () {
+            _addComment();
+            _commentFocusNode.unfocus();
+          },
+          child: Text(
+            'Post',
+            style: TextStyle(color: Colors.blue, fontWeight: FontWeight.bold),
+          ),
+        ),
+      ],
+    ),
+  );
+}
+
+Widget _buildCommentItem(Comment comment) {
+    bool isCurrentUserComment = comment.userId == currentUserId;
+    return GestureDetector(
+      onLongPress: isCurrentUserComment ? () => _showCommentOptions(comment) : null,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            GestureDetector(
+              onTap: () => _navigateToProfile(context, comment.userId),
+              child: FutureBuilder<DocumentSnapshot>(
+                future: FirebaseFirestore.instance.collection('users').doc(comment.userId).get(),
+                builder: (context, snapshot) {
+                  if (snapshot.connectionState == ConnectionState.waiting) {
+                    return CircleAvatar(
+                      radius: 16,
+                      backgroundColor: Colors.grey[300],
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    );
+                  }
+                  String photoURL = '';
+                  if (snapshot.hasData && snapshot.data != null) {
+                    photoURL = snapshot.data!['photoURL'] ?? '';
+                  }
+                  return _buildUserAvatar(photoURL, radius: 16);
+                },
+              ),
+            ),
+            SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      GestureDetector(
+                        onTap: () => _navigateToProfile(context, comment.userId),
+                        child: Text(
+                          comment.username,
+                          style: TextStyle(fontWeight: FontWeight.bold),
+                        ),
+                      ),
+                      SizedBox(width: 8),
+                      Text(
+                        _formatTimestamp(comment.timestamp),
+                        style: TextStyle(color: Colors.grey, fontSize: 12),
+                      ),
+                    ],
+                  ),
+                  SizedBox(height: 4),
+                  Text(comment.text),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+void _showCommentOptions(Comment comment) {
+  showModalBottomSheet(
+    context: context,
+    shape: RoundedRectangleBorder(
+      borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+    ),
+    builder: (BuildContext context) {
+      return SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: <Widget>[
+            ListTile(
+              leading: Icon(Icons.delete),
+              title: Text('Delete'),
+              onTap: () {
+                Navigator.pop(context);
+                _deleteComment(comment);
+              },
+            ),
+            ListTile(
+              leading: Icon(Icons.copy),
+              title: Text('Copy'),
+              onTap: () {
+                Navigator.pop(context);
+                Clipboard.setData(ClipboardData(text: comment.text));
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text('Comment copied to clipboard')),
+                );
+              },
+            ),
+            ListTile(
+              leading: Icon(Icons.edit),
+              title: Text('Edit'),
+              onTap: () {
+                Navigator.pop(context);
+                _editComment(comment);
+              },
+            ),
+          ],
+        ),
+      );
+    },
+  );
+}
+
+  void _editComment(Comment comment) {
+  showDialog(
+    context: context,
+    builder: (BuildContext context) {
+      String editedText = comment.text;
+      return AlertDialog(
+        title: Text('Edit Comment'),
+        content: TextField(
+          controller: TextEditingController(text: comment.text),
+          onChanged: (value) {
+            editedText = value;
+          },
+          decoration: InputDecoration(
+            hintText: 'Edit your comment',
+          ),
+        ),
+        actions: <Widget>[
+          TextButton(
+            child: Text('Cancel'),
+            onPressed: () {
+              Navigator.of(context).pop();
+            },
+          ),
+          TextButton(
+            child: Text('Save'),
+            onPressed: () async {
+              await FirebaseFirestore.instance
+                  .collection('posts')
+                  .doc(widget.post.id)
+                  .collection('comments')
+                  .doc(comment.id)
+                  .update({'text': editedText});
+              Navigator.of(context).pop();
+              _loadComments(); // Reload comments to reflect the change
+            },
+          ),
+        ],
+      );
+    },
+  );
+}
+
+void _deleteComment(Comment comment) {
+  showDialog(
+    context: context,
+    builder: (BuildContext context) {
+      return AlertDialog(
+        title: Text('Delete Comment'),
+        content: Text('Are you sure you want to delete this comment?'),
+        actions: <Widget>[
+          TextButton(
+            child: Text('Cancel'),
+            onPressed: () {
+              Navigator.of(context).pop();
+            },
+          ),
+          TextButton(
+            child: Text('Delete'),
+            onPressed: () async {
+              await FirebaseFirestore.instance
+                  .collection('posts')
+                  .doc(widget.post.id)
+                  .collection('comments')
+                  .doc(comment.id)
+                  .delete();
+              Navigator.of(context).pop();
+              _loadComments(); // Reload comments to reflect the change
+            },
+          ),
+        ],
+      );
+    },
+  );
+}
+
+  String _formatTimestamp(Timestamp timestamp) {
+    DateTime dateTime = timestamp.toDate();
+    Duration difference = DateTime.now().difference(dateTime);
+    if (difference.inDays > 0) {
+      return '${difference.inDays}d';
+    } else if (difference.inHours > 0) {
+      return '${difference.inHours}h';
+    } else if (difference.inMinutes > 0) {
+      return '${difference.inMinutes}m';
+    } else {
+      return 'Just now';
+    }
+  }
+
+Widget _buildActionBar() {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+      child: Column(
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Row(
+                children: [
+                  GestureDetector(
+                    onTap: () => _toggleSave(widget.post.id),
+                    child: Icon(
+                      isSaved(widget.post.id) ? Icons.bookmark : Icons.bookmark_border,
+                      size: 28,
+                    ),
+                  ),
+                  Padding(
+                    padding: EdgeInsets.only(left: 16),
+                    child: Row(
+                      children: [
+                        GestureDetector(
+                          onTap: () => _toggleLike(widget.post.id),
+                          child: Icon(
+                            isLiked(widget.post.id) ? Icons.favorite : Icons.favorite_border,
+                            color: isLiked(widget.post.id) ? Colors.red : null,
+                            size: 28,
+                          ),
+                        ),
+                        SizedBox(width: 4),
+                        Text(likes.toString(), style: TextStyle(fontSize: 14)),
+                      ],
+                    ),
+                  ),
+                  Padding(
+                    padding: EdgeInsets.only(left: 16),
+                    child: Row(
+                      children: [
+                        Icon(Icons.chat_bubble_outline, size: 28),
+                        SizedBox(width: 4),
+                        Text(comments.length.toString(), style: TextStyle(fontSize: 14)),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+              GestureDetector(
+                onTap: _sharePost,
+                child: Icon(Icons.share, size: 28),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class Comment {
+  final String id;
+  final String userId;
+  final String username;
+  final String text;
+  final Timestamp timestamp;
+
+  Comment({
+    required this.id,
+    required this.userId,
+    required this.username,
+    required this.text,
+    required this.timestamp,
+  });
+
+  factory Comment.fromDocument(DocumentSnapshot doc) {
+    Map<String, dynamic> data = doc.data() as Map<String, dynamic>;
+    return Comment(
+      id: doc.id,
+      userId: data['userId'] ?? '',
+      username: data['username'] ?? 'Unknown User',
+      text: data['text'] ?? '',
+      timestamp: data['timestamp'] ?? Timestamp.now(),
+    );
+  }
+}
+
+

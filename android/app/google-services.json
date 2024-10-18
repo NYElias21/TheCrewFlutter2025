@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "218958953338",
+    "project_id": "the-crew-flutter-app",
+    "storage_bucket": "the-crew-flutter-app.appspot.com"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:218958953338:android:1ecebd3d457da127bcf4c3",
+        "android_client_info": {
+          "package_name": "com.example.the_crew_app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyC1F8CVRM4G7XnJDaT20fzpPwksLP6L_dA"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

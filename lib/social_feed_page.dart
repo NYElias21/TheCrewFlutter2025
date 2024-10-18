@@ -1,0 +1,534 @@
+import 'package:flutter/material.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'profile_page.dart';
+import 'group_detail_page.dart';
+import 'notifications_page.dart'; // Add this import
+
+
+class SocialFeedPage extends StatefulWidget {
+  @override
+  _SocialFeedPageState createState() => _SocialFeedPageState();
+}
+
+class _SocialFeedPageState extends State<SocialFeedPage> with SingleTickerProviderStateMixin {
+  final String currentUserId = FirebaseAuth.instance.currentUser!.uid;
+  late TabController _tabController;
+
+  @override
+  void initState() {
+    super.initState();
+    _tabController = TabController(length: 2, vsync: this);
+  }
+
+  @override
+  void dispose() {
+    _tabController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: Colors.white,
+      appBar: AppBar(
+        title: Text(
+          'Your Crew',
+          style: TextStyle(
+            color: Colors.black,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        backgroundColor: Colors.white,
+        elevation: 0,
+        centerTitle: true,
+        actions: [
+          IconButton(
+            icon: Icon(Icons.notifications, color: Colors.black),
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (context) => NotificationsPage()),
+              );
+            },
+          ),
+        ],
+        bottom: TabBar(
+          controller: _tabController,
+          tabs: [
+            Tab(text: 'Upcoming Trips'),
+            Tab(text: 'Memories'),
+          ],
+          labelColor: Colors.black,
+          unselectedLabelColor: Colors.grey,
+        ),
+      ),
+      body: TabBarView(
+        controller: _tabController,
+        children: [
+          _buildUpcomingTrips(),
+          _buildMemories(),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildUpcomingTrips() {
+    return FutureBuilder<List<String>>(
+      future: _getMutualFriends(),
+      builder: (context, friendsSnapshot) {
+        if (friendsSnapshot.connectionState == ConnectionState.waiting) {
+          return Center(child: CircularProgressIndicator());
+        }
+
+        if (friendsSnapshot.hasError) {
+          return Center(child: Text('Error: ${friendsSnapshot.error}'));
+        }
+
+        List<String> mutualFriends = friendsSnapshot.data ?? [];
+        mutualFriends.add(currentUserId);
+
+        return StreamBuilder<QuerySnapshot>(
+          stream: FirebaseFirestore.instance
+              .collection('social_posts')
+              .where('sharedBy', whereIn: mutualFriends)
+              .where('isCompleted', isEqualTo: false) // Add this condition
+              .orderBy('timestamp', descending: true)
+              .snapshots(),
+          builder: (context, snapshot) {
+            if (snapshot.hasError) {
+              return Center(child: Text('Error: ${snapshot.error}'));
+            }
+
+            if (snapshot.connectionState == ConnectionState.waiting) {
+              return Center(child: CircularProgressIndicator());
+            }
+
+            if (snapshot.data!.docs.isEmpty) {
+              return Center(child: Text('No upcoming trips.'));
+            }
+
+            return ListView.separated(
+              itemCount: snapshot.data!.docs.length,
+              separatorBuilder: (context, index) => Divider(height: 1, color: Colors.grey[300]),
+              itemBuilder: (context, index) {
+                var post = snapshot.data!.docs[index];
+                return SocialPostCard(post: post);
+              },
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Widget _buildMemories() {
+    return FutureBuilder<List<String>>(
+      future: _getMutualFriends(),
+      builder: (context, friendsSnapshot) {
+        if (friendsSnapshot.connectionState == ConnectionState.waiting) {
+          return Center(child: CircularProgressIndicator());
+        }
+
+        if (friendsSnapshot.hasError) {
+          return Center(child: Text('Error: ${friendsSnapshot.error}'));
+        }
+
+        List<String> mutualFriends = friendsSnapshot.data ?? [];
+        mutualFriends.add(currentUserId);
+
+        return StreamBuilder<QuerySnapshot>(
+          stream: FirebaseFirestore.instance
+              .collection('social_posts')
+              .where('sharedBy', whereIn: mutualFriends)
+              .where('isCompleted', isEqualTo: true) // Add this condition
+              .orderBy('timestamp', descending: true)
+              .snapshots(),
+          builder: (context, snapshot) {
+            if (snapshot.hasError) {
+              return Center(child: Text('Error: ${snapshot.error}'));
+            }
+
+            if (snapshot.connectionState == ConnectionState.waiting) {
+              return Center(child: CircularProgressIndicator());
+            }
+
+            if (snapshot.data!.docs.isEmpty) {
+              return Center(child: Text('No memories yet.'));
+            }
+
+            return ListView.separated(
+              itemCount: snapshot.data!.docs.length,
+              separatorBuilder: (context, index) => Divider(height: 1, color: Colors.grey[300]),
+              itemBuilder: (context, index) {
+                var post = snapshot.data!.docs[index];
+                return SocialPostCard(post: post);
+              },
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Future<List<String>> _getMutualFriends() async {
+    DocumentSnapshot userDoc = await FirebaseFirestore.instance
+        .collection('users')
+        .doc(currentUserId)
+        .get();
+    List<String> following = List<String>.from(userDoc['following'] ?? []);
+
+    QuerySnapshot followersQuery = await FirebaseFirestore.instance
+        .collection('users')
+        .where('following', arrayContains: currentUserId)
+        .get();
+
+    Set<String> followers = followersQuery.docs.map((doc) => doc.id).toSet();
+    List<String> mutualFriends = following.where((userId) => followers.contains(userId)).toList();
+
+    return mutualFriends;
+  }
+}
+
+class SocialPostCard extends StatelessWidget {
+  final DocumentSnapshot post;
+  final String currentUserId = FirebaseAuth.instance.currentUser!.uid;
+
+  SocialPostCard({required this.post});
+
+  @override
+  Widget build(BuildContext context) {
+    Map<String, dynamic> data = post.data() as Map<String, dynamic>;
+    String userId = data['sharedBy'] ?? '';
+    String caption = data['caption'] ?? '';
+    List<String> imageUrls = List<String>.from(data['imageUrls'] ?? []);
+    Map<String, int> reactions = Map<String, int>.from(data['reactions'] ?? {});
+    Timestamp timestamp = data['timestamp'] ?? Timestamp.now();
+    bool isGroupActivity = data['isGroupActivity'] ?? false;
+    List<String> groupMembers = List<String>.from(data['groupMembers'] ?? []);
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        FutureBuilder<DocumentSnapshot>(
+          future: FirebaseFirestore.instance.collection('users').doc(userId).get(),
+          builder: (context, snapshot) {
+            if (snapshot.connectionState == ConnectionState.waiting) {
+              return ListTile(
+                leading: CircleAvatar(
+                  backgroundColor: Colors.grey[300],
+                  child: CircularProgressIndicator(),
+                ),
+                title: Text('Loading...'),
+                subtitle: Text(_formatTimestamp(timestamp)),
+              );
+            }
+
+            if (snapshot.hasError) {
+              return ListTile(
+                leading: CircleAvatar(
+                  backgroundColor: Colors.grey[300],
+                  child: Icon(Icons.error),
+                ),
+                title: Text('Error loading user'),
+                subtitle: Text(_formatTimestamp(timestamp)),
+              );
+            }
+
+            var userData = snapshot.data!.data() as Map<String, dynamic>?;
+            String username = userData?['username'] ?? 'Unknown User';
+            String userPhotoUrl = userData?['photoURL'] ?? '';
+
+            return ListTile(
+              leading: GestureDetector(
+                onTap: () => _navigateToProfile(context, userId),
+                child: CircleAvatar(
+                  backgroundImage: userPhotoUrl.isNotEmpty ? NetworkImage(userPhotoUrl) : null,
+                  child: userPhotoUrl.isEmpty ? Icon(Icons.person) : null,
+                ),
+              ),
+              title: GestureDetector(
+                onTap: () => _navigateToProfile(context, userId),
+                child: Text(username, style: TextStyle(fontWeight: FontWeight.bold)),
+              ),
+              subtitle: Text(_formatTimestamp(timestamp)),
+              trailing: IconButton(
+                icon: Icon(Icons.more_horiz),
+                onPressed: () {
+                  // TODO: Implement post options menu
+                },
+              ),
+            );
+          },
+        ),
+        if (caption.isNotEmpty)
+          Padding(
+            padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            child: Text(caption),
+          ),
+        if (imageUrls.isNotEmpty)
+          Padding(
+            padding: EdgeInsets.symmetric(horizontal: 16),
+            child: _buildImageGrid(imageUrls),
+          ),
+        // New section: Group members and button
+        Padding(
+          padding: EdgeInsets.all(16),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              // Group members
+              if (isGroupActivity)
+                Expanded(
+                  child: _buildGroupMembersSection(context, groupMembers),
+                ),
+              // Button
+              _buildActionButton(context, isGroupActivity, groupMembers, userId),
+            ],
+          ),
+        ),
+        // Reactions
+        Padding(
+          padding: EdgeInsets.symmetric(horizontal: 16),
+          child: _buildReactionsSection(context, reactions),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildImageGrid(List<String> imageUrls) {
+    if (imageUrls.isEmpty) return SizedBox.shrink();
+
+    return AspectRatio(
+      aspectRatio: 1.91,
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(12),
+        child: Row(
+          children: [
+            Expanded(
+              flex: 1,
+              child: Image.network(
+                imageUrls[0],
+                fit: BoxFit.cover,
+                height: double.infinity,
+              ),
+            ),
+            if (imageUrls.length > 1) ...[
+              SizedBox(width: 2),
+              Expanded(
+                flex: 1,
+                child: Column(
+                  children: [
+                    Expanded(
+                      child: Image.network(
+                        imageUrls[1],
+                        fit: BoxFit.cover,
+                        width: double.infinity,
+                      ),
+                    ),
+                    if (imageUrls.length > 2) ...[
+                      SizedBox(height: 2),
+                      Expanded(
+                        child: Image.network(
+                          imageUrls[2],
+                          fit: BoxFit.cover,
+                          width: double.infinity,
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+Widget _buildGroupMembersSection(BuildContext context, List<String> groupMembers) {
+  return SizedBox(
+    height: 40, // Increased from 32 to 40
+    child: Stack(
+      alignment: Alignment.centerLeft, // Align items to the left vertically centered
+      children: [
+        for (var i = 0; i < groupMembers.length; i++)
+          if (i < 4)
+            Positioned(
+              left: i * 24.0, // Increased from 20 to 24 for more spacing
+              child: FutureBuilder<DocumentSnapshot>(
+                future: FirebaseFirestore.instance.collection('users').doc(groupMembers[i]).get(),
+                builder: (context, snapshot) {
+                  if (snapshot.connectionState == ConnectionState.waiting) {
+                    return CircleAvatar(
+                      backgroundColor: Colors.grey[300],
+                      radius: 18, // Increased from 16 to 18
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    );
+                  }
+                  if (snapshot.hasError || !snapshot.hasData) {
+                    return CircleAvatar(
+                      backgroundColor: Colors.grey[300],
+                      radius: 18, // Increased from 16 to 18
+                      child: Icon(Icons.error, size: 18),
+                    );
+                  }
+                  var userData = snapshot.data!.data() as Map<String, dynamic>?;
+                  String userPhotoUrl = userData?['photoURL'] ?? '';
+                  return Container(
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      border: Border.all(color: Colors.white, width: 2),
+                    ),
+                    child: CircleAvatar(
+                      backgroundImage: userPhotoUrl.isNotEmpty ? NetworkImage(userPhotoUrl) : null,
+                      radius: 18, // Increased from 16 to 18
+                      child: userPhotoUrl.isEmpty ? Icon(Icons.person, size: 18) : null,
+                    ),
+                  );
+                },
+              ),
+            ),
+        if (groupMembers.length > 4)
+          Positioned(
+            left: 4 * 24.0, // Adjusted to match new spacing
+            child: Container(
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                border: Border.all(color: Colors.white, width: 2),
+                color: Colors.grey[300],
+              ),
+              child: CircleAvatar(
+                backgroundColor: Colors.transparent,
+                radius: 18, // Increased from 16 to 18
+                child: Text(
+                  '+${groupMembers.length - 4}',
+                  style: TextStyle(fontSize: 12, color: Colors.black, fontWeight: FontWeight.bold),
+                ),
+              ),
+            ),
+          ),
+      ],
+    ),
+  );
+}
+
+Widget _buildActionButton(BuildContext context, bool isGroupActivity, List<String> groupMembers, String postCreatorId) {
+  bool hasJoined = groupMembers.contains(currentUserId);
+  bool isCreator = currentUserId == postCreatorId;
+  bool showViewGroupButton = isCreator || (isGroupActivity && hasJoined);
+
+  if (showViewGroupButton) {
+    return ElevatedButton(
+      onPressed: () {
+        String groupId = (post.data() as Map<String, dynamic>)['groupId'] ?? post.id;
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => GroupDetailPage(groupId: groupId),
+          ),
+        );
+      },
+      child: Text('View Group'),
+      style: ElevatedButton.styleFrom(
+        backgroundColor: Colors.black,
+        foregroundColor: Colors.white,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(20),
+        ),
+      ),
+    );
+  } else if (isGroupActivity) {
+    return ElevatedButton(
+      onPressed: () async {
+        if (!groupMembers.contains(currentUserId)) {
+          String groupId = (post.data() as Map<String, dynamic>)['groupId'] ?? post.id;
+          
+          try {
+            await FirebaseFirestore.instance.runTransaction((transaction) async {
+              // Perform all reads first
+              DocumentSnapshot groupSnapshot = await transaction.get(FirebaseFirestore.instance.collection('groups').doc(groupId));
+              DocumentSnapshot postSnapshot = await transaction.get(post.reference);
+
+              // Now perform the updates
+              List<String> members = List<String>.from(groupSnapshot['members'] ?? []);
+              List<String> postGroupMembers = List<String>.from(postSnapshot['groupMembers'] ?? []);
+
+              if (!members.contains(currentUserId)) {
+                members.add(currentUserId);
+                transaction.update(groupSnapshot.reference, {'members': members});
+              }
+
+              if (!postGroupMembers.contains(currentUserId)) {
+                postGroupMembers.add(currentUserId);
+                transaction.update(postSnapshot.reference, {'groupMembers': postGroupMembers});
+              }
+            });
+            
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text('Successfully joined the group!')),
+            );
+            
+            (context as Element).reassemble(); // Force refresh
+          } catch (e) {
+            print('Error joining group: $e');
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text('Failed to join the group. Please try again.')),
+            );
+          }
+        }
+      },
+      child: Text('Join'),
+      style: ElevatedButton.styleFrom(
+        backgroundColor: Colors.black,
+        foregroundColor: Colors.white,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(20),
+        ),
+      ),
+    );
+  } else {
+    return SizedBox.shrink(); // No button for non-group activities
+  }
+}
+
+  Widget _buildReactionsSection(BuildContext context, Map<String, int> reactions) {
+    return Row(
+      children: [
+        Wrap(
+          spacing: 8,
+          children: reactions.entries.map((entry) {
+            return Chip(
+              label: Text('${entry.key} ${entry.value}'),
+              backgroundColor: Colors.grey[200],
+            );
+          }).toList(),
+        ),
+      ],
+    );
+  }
+
+  String _formatTimestamp(Timestamp timestamp) {
+    DateTime dateTime = timestamp.toDate();
+    Duration difference = DateTime.now().difference(dateTime);
+    if (difference.inDays > 0) {
+      return '${dateTime.month}/${dateTime.day}';
+    } else if (difference.inHours > 0) {
+      return '${difference.inHours}h';
+    } else if (difference.inMinutes > 0) {
+      return '${difference.inMinutes}m';
+    } else {
+      return 'Just now';
+    }
+  }
+
+  void _navigateToProfile(BuildContext context, String userId) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => ProfilePage(userId: userId),
+      ),
+    );
+  }
+}
