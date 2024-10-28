@@ -7,6 +7,7 @@ import 'create_postgc_page.dart';
 import 'package:intl/intl.dart';
 import 'profile_page.dart';  
 import 'dart:io';
+import 'package:google_maps_flutter/google_maps_flutter.dart';
 
 class GroupDetailPage extends StatefulWidget {
   final String groupId;
@@ -187,6 +188,25 @@ SliverToBoxAdapter(
   );
 }
 
+Widget safeNetworkImage(String? url, {BoxFit fit = BoxFit.cover}) {
+  if (url == null || url.isEmpty) {
+    return Container(
+      color: Colors.grey[300],
+      child: Icon(Icons.image_not_supported),
+    );
+  }
+  return Image.network(
+    url,
+    fit: fit,
+    errorBuilder: (context, error, stackTrace) {
+      print('Error loading image: $error');
+      return Container(
+        color: Colors.grey[300],
+        child: Icon(Icons.error),
+      );
+    },
+  );
+}
 
 Widget _buildMemberList(List<dynamic> members) {
     return Container(
@@ -499,44 +519,55 @@ Widget _buildListTileFromData(Map<String, dynamic> userData, String userId) {
   }
 
 Widget _buildDetailsTab(Map<String, dynamic> groupData) {
-  Map<String, dynamic> originalPostData = groupData['originalPost'] ?? {};
-  List<dynamic> originalActivities = [];
-  
-  if (originalPostData['postType'] == 'itinerary') {
-    originalActivities = originalPostData['itinerary'] ?? [];
-  } else {
-    // For single posts or if itinerary is not available, use the title and description
-    originalActivities = [{
-      'name': originalPostData['title'] ?? 'Untitled Activity',
-      'description': originalPostData['description'] ?? 'No description',
-    }];
-  }
+  print("Group Data: $groupData"); // Debug print
 
+  // Get activities directly from groupData
+  List<dynamic> activities = groupData['activities'] ?? [];
+  
+  print("Activities from group: $activities"); // Debug print
+
+  return ListView(
+    padding: EdgeInsets.all(16),
+    children: [
+      // Build map with activities from groupData
+      if (activities.isNotEmpty) 
+        _buildOverviewMap(activities),
+      
+      // List activities
+      Text('Group Activities', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+      SizedBox(height: 8),
+      if (activities.isEmpty)
+        Text('No activities added yet. Add some activities to get started!'),
+      ...activities.asMap().entries.map((entry) {
+        int index = entry.key;
+        Map<String, dynamic> activity = entry.value;
+        return ListTile(
+          title: Text(activity['name'] ?? 'Unnamed Activity'),
+          subtitle: Text(activity['description'] ?? 'No description'),
+          trailing: IconButton(
+            icon: Icon(Icons.edit),
+            onPressed: () => _editActivity(index, activity),
+          ),
+        );
+      }).toList(),
+      ElevatedButton(
+        onPressed: _addActivity,
+        child: Text('Add Activity'),
+      ),
+    ],
+  );
+}
+
+Widget _buildFallbackDetailsView(Map<String, dynamic> groupData) {
   List<dynamic> userActivities = groupData['activities'] ?? [];
 
   return ListView(
     padding: EdgeInsets.all(16),
     children: [
-      Text('Original Activities', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-      SizedBox(height: 8),
-      ...originalActivities.expand((day) {
-        if (day is Map && day['activities'] != null) {
-          return (day['activities'] as List).map((activity) => ListTile(
-            title: Text(activity['name'] ?? 'Unnamed Activity'),
-            subtitle: Text(activity['description'] ?? 'No description'),
-          ));
-        } else if (day is Map) {
-          return [ListTile(
-            title: Text(day['name'] ?? 'Unnamed Activity'),
-            subtitle: Text(day['description'] ?? 'No description'),
-          )];
-        } else {
-          return []; // Return an empty list if the day is not in the expected format
-        }
-      }).toList(),
-      SizedBox(height: 16),
       Text('Group Activities', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
       SizedBox(height: 8),
+      if (userActivities.isEmpty)
+        Text('No activities added yet. Add some activities to get started!'),
       ...userActivities.asMap().entries.map((entry) {
         int index = entry.key;
         Map<String, dynamic> activity = entry.value;
@@ -554,6 +585,152 @@ Widget _buildDetailsTab(Map<String, dynamic> groupData) {
         child: Text('Add Activity'),
       ),
     ],
+  );
+}
+
+Widget _buildOverviewMap(List<dynamic> activities) {
+  if (activities.isEmpty) {
+    return SizedBox.shrink();
+  }
+
+  return FutureBuilder<Set<Marker>>(
+    future: _createMarkers(activities),
+    builder: (context, snapshot) {
+      if (snapshot.connectionState == ConnectionState.waiting) {
+        return Center(child: CircularProgressIndicator());
+      }
+
+      if (snapshot.hasError) {
+        print('Error creating markers: ${snapshot.error}');
+        return Text('Error loading map');
+      }
+
+      Set<Marker> markers = snapshot.data ?? {};
+      if (markers.isEmpty) {
+        return SizedBox.shrink();
+      }
+
+      List<LatLng> points = markers.map((marker) => marker.position).toList();
+      LatLngBounds bounds = _calculateBounds(points);
+      LatLng center = _calculateCenter(bounds);
+
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            height: 200,
+            child: GoogleMap(
+              initialCameraPosition: CameraPosition(
+                target: center,
+                zoom: 10,
+              ),
+              markers: markers,
+              onMapCreated: (GoogleMapController controller) {
+                controller.animateCamera(CameraUpdate.newLatLngBounds(bounds, 50));
+              },
+              zoomControlsEnabled: false,
+              mapToolbarEnabled: false,
+              myLocationButtonEnabled: false,
+            ),
+          ),
+          SizedBox(height: 8),
+          Text(
+            'Activities',
+            style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+          ),
+          SizedBox(height: 16),
+        ],
+      );
+    },
+  );
+}
+
+// In group_detail_page.dart, update the _createMarkers function:
+
+Future<Set<Marker>> _createMarkers(List<dynamic> activities) async {
+  Set<Marker> markers = {};
+  int markerNumber = 1;
+
+  print("Processing activities: $activities"); // Debug print
+
+  for (var activity in activities) {
+    print("Processing activity: $activity"); // Add this debug print
+
+    if (activity is Map<String, dynamic>) {
+      // Properly extract location data
+      final location = activity['location'];
+      if (location != null && location is Map<String, dynamic>) {
+        // Extract lat/lng values, handling potential double or int types
+        double? lat = location['lat'] is int 
+            ? (location['lat'] as int).toDouble() 
+            : location['lat'] as double?;
+        
+        double? lng = location['lng'] is int 
+            ? (location['lng'] as int).toDouble() 
+            : location['lng'] as double?;
+
+        if (lat != null && lng != null) {
+          String name = activity['name'] ?? 'Activity $markerNumber';
+          print("Creating marker for $name at $lat, $lng"); // Add this debug print
+          
+          markers.add(Marker(
+            markerId: MarkerId(name),
+            position: LatLng(lat, lng),
+            infoWindow: InfoWindow(
+              title: "$markerNumber. $name",
+              snippet: activity['description'] ?? ''
+            ),
+            icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueAzure),
+          ));
+          markerNumber++;
+        } else {
+          print("Invalid lat/lng values in location data: $location");
+        }
+      } else {
+        print("No valid location data found in activity: $activity");
+      }
+    }
+  }
+
+  print("Created ${markers.length} markers"); // Debug print
+  return markers;
+}
+
+LatLngBounds _calculateBounds(List<LatLng> points) {
+  if (points.isEmpty) {
+    // Default bounds for North Carolina if no points
+    return LatLngBounds(
+      southwest: LatLng(33.8361, -84.3213),  // Southwest NC
+      northeast: LatLng(36.5881, -75.4001),  // Northeast NC
+    );
+  }
+
+  double minLat = points[0].latitude;
+  double maxLat = points[0].latitude;
+  double minLng = points[0].longitude;
+  double maxLng = points[0].longitude;
+
+  for (LatLng point in points) {
+    if (point.latitude < minLat) minLat = point.latitude;
+    if (point.latitude > maxLat) maxLat = point.latitude;
+    if (point.longitude < minLng) minLng = point.longitude;
+    if (point.longitude > maxLng) maxLng = point.longitude;
+  }
+
+  // Add padding to bounds
+  double latPadding = (maxLat - minLat) * 0.1;
+  double lngPadding = (maxLng - minLng) * 0.1;
+
+  return LatLngBounds(
+    southwest: LatLng(minLat - latPadding, minLng - lngPadding),
+    northeast: LatLng(maxLat + latPadding, maxLng + lngPadding),
+  );
+}
+
+LatLng _calculateCenter(LatLngBounds bounds) {
+  return LatLng(
+    (bounds.northeast.latitude + bounds.southwest.latitude) / 2,
+    (bounds.northeast.longitude + bounds.southwest.longitude) / 2,
   );
 }
 
@@ -641,7 +818,42 @@ Widget _buildPostsList() {
   );
 }
 
+Widget _buildImageTile(String imageUrl) {
+  if (imageUrl.isEmpty) {
+    return Container(
+      color: Colors.grey[300],
+      child: Icon(Icons.image_not_supported),
+    );
+  }
+  return ClipRRect(
+    borderRadius: BorderRadius.circular(8),
+    child: Image.network(
+      imageUrl,
+      fit: BoxFit.cover,
+      loadingBuilder: (context, child, loadingProgress) {
+        if (loadingProgress == null) return child;
+        return Center(
+          child: CircularProgressIndicator(
+            value: loadingProgress.expectedTotalBytes != null
+                ? loadingProgress.cumulativeBytesLoaded / loadingProgress.expectedTotalBytes!
+                : null,
+          ),
+        );
+      },
+      errorBuilder: (context, error, stackTrace) {
+        print('Error loading image: $error');
+        return Container(
+          color: Colors.grey[300],
+          child: Icon(Icons.error),
+        );
+      },
+    ),
+  );
+}
+
 Widget _buildPostCard(Map<String, dynamic> postData, String postId) {
+  List<String> imageUrls = List<String>.from(postData['imageUrls'] ?? []);
+  
   return Column(
     crossAxisAlignment: CrossAxisAlignment.start,
     children: [
@@ -652,14 +864,29 @@ Widget _buildPostCard(Map<String, dynamic> postData, String postId) {
           children: [
             Row(
               children: [
-                CircleAvatar(
-                  backgroundImage: postData['authorPhotoUrl'] != null
-                      ? NetworkImage(postData['authorPhotoUrl'])
-                      : null,
-                  child: postData['authorPhotoUrl'] == null
-                      ? Text(postData['authorName'][0])
-                      : null,
-                  radius: 20,
+                FutureBuilder<DocumentSnapshot>(
+                  future: FirebaseFirestore.instance.collection('users').doc(postData['authorId']).get(),
+                  builder: (context, snapshot) {
+                    if (snapshot.connectionState == ConnectionState.waiting) {
+                      return CircleAvatar(
+                        radius: 20,
+                        backgroundColor: Colors.grey[300],
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      );
+                    }
+                    String photoURL = '';
+                    if (snapshot.hasData && snapshot.data != null) {
+                      photoURL = snapshot.data!['photoURL'] ?? '';
+                    }
+                    return CircleAvatar(
+                      radius: 20,
+                      backgroundColor: Colors.grey[300],
+                      backgroundImage: photoURL.isNotEmpty ? NetworkImage(photoURL) : null,
+                      child: photoURL.isEmpty
+                          ? Icon(Icons.person, size: 24, color: Colors.grey[600])
+                          : null,
+                    );
+                  },
                 ),
                 SizedBox(width: 12),
                 Expanded(
@@ -667,7 +894,7 @@ Widget _buildPostCard(Map<String, dynamic> postData, String postId) {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        postData['authorName'],
+                        postData['authorName'] ?? 'Unknown',
                         style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
                       ),
                       Text(
@@ -681,26 +908,33 @@ Widget _buildPostCard(Map<String, dynamic> postData, String postId) {
             ),
             SizedBox(height: 12),
             Text(
-              postData['text'],
+              postData['text'] ?? '',
               style: TextStyle(fontSize: 14),
             ),
-            if (postData['imageUrls'] != null && (postData['imageUrls'] as List).isNotEmpty)
+            if (imageUrls.isNotEmpty && imageUrls.any((url) => url != null && url.isNotEmpty))
               Container(
                 height: 200,
                 margin: EdgeInsets.only(top: 12),
                 child: ListView.builder(
                   scrollDirection: Axis.horizontal,
-                  itemCount: (postData['imageUrls'] as List).length,
+                  itemCount: imageUrls.length,
                   itemBuilder: (context, index) {
+                    if (imageUrls[index] == null || imageUrls[index].isEmpty) {
+                      return Container(); // Skip null or empty URLs
+                    }
                     return Container(
                       width: 200,
                       margin: EdgeInsets.only(right: 8),
-                      decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(8),
-                        image: DecorationImage(
-                          image: NetworkImage(postData['imageUrls'][index]),
-                          fit: BoxFit.cover,
-                        ),
+                      child: Image.network(
+                        imageUrls[index],
+                        fit: BoxFit.cover,
+                        errorBuilder: (context, error, stackTrace) {
+                          print('Error loading image: $error');
+                          return Container(
+                            color: Colors.grey[300],
+                            child: Icon(Icons.error),
+                          );
+                        },
                       ),
                     );
                   },
@@ -1162,3 +1396,5 @@ class _SliverAppBarDelegate extends SliverPersistentHeaderDelegate {
     return false;
   }
 }
+
+

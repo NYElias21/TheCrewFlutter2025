@@ -23,6 +23,8 @@ dependencies:
   geolocator: ^9.0.0
   google_place: ^0.4.7
   intl: ^0.17.0  # Add this line
+  #photo_manager: ^2.8.0
+  photo_manager: ^3.0.0-dev.1
   # share_plus: ^4.0.4
 
 dev_dependencies:

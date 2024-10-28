@@ -3,12 +3,12 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:firebase_storage/firebase_storage.dart';
-import 'package:google_maps_flutter/google_maps_flutter.dart';
-import 'package:geolocator/geolocator.dart';
 import 'dart:io';
 import 'package:google_place/google_place.dart';
+import 'package:flutter/gestures.dart';
+import 'photo_editor_page.dart';
+import 'custom_photo_selector.dart';
 
-enum PostType { single, itinerary }
 
 class CreatePostPage extends StatefulWidget {
   @override
@@ -18,17 +18,33 @@ class CreatePostPage extends StatefulWidget {
 class _CreatePostPageState extends State<CreatePostPage> {
   final _formKey = GlobalKey<FormState>();
   final ImagePicker _picker = ImagePicker();
-  PostType _postType = PostType.single;
+  final TextEditingController _bottomSheetSearchController = TextEditingController();
+  final TextEditingController _descriptionController = TextEditingController();
+  late GooglePlace googlePlace;
+  List<AutocompletePrediction> _predictions = [];
   List<XFile> _images = [];
+  List<Activity> _activities = [];
   String _title = '';
   String _description = '';
+  String _userDescription = '';
   bool _isLoading = false;
   String _selectedCategory = 'All';
   String _selectedCity = 'All Cities';
   List<String> _categories = ['All', 'Outdoors', 'Food', 'Dates', 'Nightlife', 'Coffee', 'Free'];
   List<String> _cities = ['All Cities', 'Charlotte', 'Raleigh', 'Asheville', 'Wilmington', 'Durham', 'Chapel Hill'];
-  
-  List<ItineraryDay> _itineraryDays = [ItineraryDay(activities: [Activity()])];
+
+  @override
+  void initState() {
+    super.initState();
+    googlePlace = GooglePlace('AIzaSyCrQnPUOQ6ho_LItD4mC1yRFcA0SEWKYBM');
+  }
+
+@override
+void dispose() {
+  _descriptionController.dispose();
+  _bottomSheetSearchController.dispose();
+  super.dispose();
+}
 
   @override
   Widget build(BuildContext context) {
@@ -39,7 +55,7 @@ class _CreatePostPageState extends State<CreatePostPage> {
           IconButton(
             icon: Icon(Icons.remove_red_eye),
             onPressed: () {
-              // Implement preview functionality if needed
+              // Implement preview functionality
             },
           ),
         ],
@@ -50,35 +66,18 @@ class _CreatePostPageState extends State<CreatePostPage> {
           key: _formKey,
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              SegmentedButton<PostType>(
-                segments: [
-                  ButtonSegment(value: PostType.single, label: Text('Single Post')),
-                  ButtonSegment(value: PostType.itinerary, label: Text('Itinerary')),
-                ],
-                selected: <PostType>{_postType},
-                onSelectionChanged: (Set<PostType> newSelection) {
-                  setState(() {
-                    _postType = newSelection.first;
-                  });
-                },
-              ),
-              SizedBox(height: 16),
-              _buildImageSelectionSection(),
-              SizedBox(height: 16),
-              _buildCategoryDropdown(),
-              SizedBox(height: 16),
-              _buildCityDropdown(),
-              SizedBox(height: 16),
-              _buildTitleField(),
-              SizedBox(height: 16),
-              _buildDescriptionField(),
-              SizedBox(height: 16),
-              if (_postType == PostType.itinerary)
-                ..._buildItineraryFields(),
-              SizedBox(height: 24),
-              _buildPostButton(),
-            ],
+children: [
+  _buildImageSelectionSection(),
+  SizedBox(height: 16),
+  _buildTitleField(),
+  Divider(height: 1, thickness: 1, color: Colors.grey[300]),
+  SizedBox(height: 16),
+  _buildDescriptionField(),
+  SizedBox(height: 16),
+  _buildInteractionButtons(),
+  SizedBox(height: 24),
+  _buildPostButton(),
+],
           ),
         ),
       ),
@@ -120,7 +119,202 @@ class _CreatePostPageState extends State<CreatePostPage> {
     );
   }
 
-  Widget _buildCategoryDropdown() {
+  Widget _buildTitleField() {
+    return TextFormField(
+      decoration: InputDecoration(
+        hintText: 'Add a headline',
+        border: InputBorder.none,
+      ),
+      validator: (value) => value!.isEmpty ? 'Please enter a title' : null,
+      onChanged: (value) => _title = value,
+    );
+  }
+
+Widget _buildDescriptionField() {
+  return Container(
+    constraints: BoxConstraints(minHeight: 100), // Give it some minimum height
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // User input field for the main description
+        TextFormField(
+          decoration: InputDecoration(
+            hintText: 'Tap to add a description',
+            border: InputBorder.none,
+          ),
+          maxLines: null,
+          onChanged: (value) {
+            setState(() {
+              _userDescription = value;
+              _updateDescription();
+            });
+          },
+        ),
+        // Display activities with rich text
+        if (_activities.isNotEmpty) ...[
+          SizedBox(height: 16),
+          ..._activities.map((activity) {
+            return Padding(
+              padding: EdgeInsets.only(bottom: 8.0),
+              child: RichText(
+                text: TextSpan(
+                  style: DefaultTextStyle.of(context).style,
+                  children: [
+                    TextSpan(text: '📍 '),
+                    TextSpan(
+                      text: activity.name,
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    if (activity.description.isNotEmpty) ...[
+                      TextSpan(text: ': '),
+                      TextSpan(text: activity.description),
+                    ],
+                  ],
+                ),
+              ),
+            );
+          }).toList(),
+        ],
+      ],
+    ),
+  );
+}
+
+//previous version with the single activity button, new version under this includes all 3.
+/*   Widget _buildActivityButton() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        TextButton.icon(
+          onPressed: _showAddActivityBottomSheet,
+          icon: Icon(Icons.add, size: 20, color: Colors.black),
+          label: Text(
+            'Activity',
+            style: TextStyle(
+              color: Colors.black,
+              fontSize: 14,
+            ),
+          ),
+          style: TextButton.styleFrom(
+            backgroundColor: Colors.grey[100],
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(20),
+            ),
+            padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          ),
+        ),
+      ],
+    );
+  } */
+
+  Widget _buildInteractionButtons() {
+  return SingleChildScrollView(
+    scrollDirection: Axis.horizontal,
+    child: Row(
+      children: [
+        // Activity Button
+        TextButton.icon(
+          onPressed: _showAddActivityBottomSheet,
+          icon: Icon(Icons.add, size: 20, color: Colors.black),
+          label: Text(
+            'Activity',
+            style: TextStyle(
+              color: Colors.black,
+              fontSize: 14,
+            ),
+          ),
+          style: TextButton.styleFrom(
+            backgroundColor: Colors.grey[100],
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(20),
+            ),
+            padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          ),
+        ),
+        SizedBox(width: 8),
+        // Category Button
+        PopupMenuButton<String>(
+          child: Container(
+            padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            decoration: BoxDecoration(
+              color: Colors.grey[100],
+              borderRadius: BorderRadius.circular(20),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  _selectedCategory,
+                  style: TextStyle(
+                    color: Colors.black,
+                    fontSize: 14,
+                  ),
+                ),
+                SizedBox(width: 4),
+                Icon(Icons.arrow_drop_down, color: Colors.black, size: 20),
+              ],
+            ),
+          ),
+          onSelected: (String value) {
+            setState(() {
+              _selectedCategory = value;
+            });
+          },
+          itemBuilder: (BuildContext context) {
+            return _categories.map((String category) {
+              return PopupMenuItem<String>(
+                value: category,
+                child: Text(category),
+              );
+            }).toList();
+          },
+        ),
+        SizedBox(width: 8),
+        // City Button
+        PopupMenuButton<String>(
+          child: Container(
+            padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            decoration: BoxDecoration(
+              color: Colors.grey[100],
+              borderRadius: BorderRadius.circular(20),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  _selectedCity,
+                  style: TextStyle(
+                    color: Colors.black,
+                    fontSize: 14,
+                  ),
+                ),
+                SizedBox(width: 4),
+                Icon(Icons.arrow_drop_down, color: Colors.black, size: 20),
+              ],
+            ),
+          ),
+          onSelected: (String value) {
+            setState(() {
+              _selectedCity = value;
+            });
+          },
+          itemBuilder: (BuildContext context) {
+            return _cities.map((String city) {
+              return PopupMenuItem<String>(
+                value: city,
+                child: Text(city),
+              );
+            }).toList();
+          },
+        ),
+      ],
+    ),
+  );
+}
+
+  /* Widget _buildCategoryDropdown() {
     return DropdownButtonFormField<String>(
       decoration: InputDecoration(
         labelText: 'Category',
@@ -161,106 +355,7 @@ class _CreatePostPageState extends State<CreatePostPage> {
       },
     );
   }
-
-  Widget _buildTitleField() {
-    return TextFormField(
-      decoration: InputDecoration(
-        labelText: 'Add a catchy headline to get more views',
-        border: OutlineInputBorder(),
-      ),
-      validator: (value) => value!.isEmpty ? 'Please enter a title' : null,
-      onChanged: (value) => _title = value,
-    );
-  }
-
-  Widget _buildDescriptionField() {
-    return TextFormField(
-      decoration: InputDecoration(
-        labelText: 'Tap to add a description',
-        border: OutlineInputBorder(),
-      ),
-      maxLines: 3,
-      validator: (value) => value!.isEmpty ? 'Please enter a description' : null,
-      onChanged: (value) => _description = value,
-    );
-  }
-
-  List<Widget> _buildItineraryFields() {
-    return [
-      Text('Itinerary', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-      ..._itineraryDays.asMap().entries.map((entry) {
-        int dayIndex = entry.key;
-        ItineraryDay day = entry.value;
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text('Day ${dayIndex + 1}', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-            ...day.activities.asMap().entries.map((activityEntry) {
-              int activityIndex = activityEntry.key;
-              Activity activity = activityEntry.value;
-              return Column(
-                children: [
-                  TextFormField(
-                    decoration: InputDecoration(labelText: 'Activity Name'),
-                    onChanged: (value) => activity.name = value,
-                  ),
-                  TextFormField(
-                    decoration: InputDecoration(labelText: 'Activity Description'),
-                    onChanged: (value) => activity.description = value,
-                  ),
-                  ElevatedButton(
-                    onPressed: () => _selectLocation(activity),
-                    child: Text(activity.location != null ? 'Change Location' : 'Add Location'),
-                  ),
-                if (activity.placeDescription != null)
-  Text('Location: ${activity.placeDescription}'),
-
-                  if (activityIndex == day.activities.length - 1)
-                    ElevatedButton(
-                      onPressed: () {
-                        setState(() {
-                          day.activities.add(Activity());
-                        });
-                      },
-                      child: Text('Add Activity'),
-                    ),
-                ],
-              );
-            }).toList(),
-            if (dayIndex == _itineraryDays.length - 1)
-              ElevatedButton(
-                onPressed: () {
-                  setState(() {
-                    _itineraryDays.add(ItineraryDay(activities: [Activity()]));
-                  });
-                },
-                child: Text('Add Day'),
-              ),
-          ],
-        );
-      }).toList(),
-    ];
-  }
-
-Future<void> _selectLocation(Activity activity) async {
-  final LatLng? selectedLocation = await Navigator.push(
-    context,
-    MaterialPageRoute(
-      builder: (context) => LocationPickerPage(
-        activity: activity,  // Pass the activity here
-        apiKey: 'AIzaSyCrQnPUOQ6ho_LItD4mC1yRFcA0SEWKYBM',
-      ),
-    ),
-  );
-
-  if (selectedLocation != null) {
-    setState(() {
-      activity.location = selectedLocation;
-    });
-  }
-}
-
-
+ */
   Widget _buildPostButton() {
     return ElevatedButton(
       onPressed: _isLoading ? null : _createPost,
@@ -283,21 +378,339 @@ Future<void> _selectLocation(Activity activity) async {
     );
   }
 
-  Future<void> _getImages() async {
-    final List<XFile>? pickedFiles = await _picker.pickMultiImage();
-    if (pickedFiles != null && pickedFiles.isNotEmpty) {
-      setState(() {
-        _images.addAll(pickedFiles);
-        if (_images.length > 10) {
-          _images = _images.sublist(0, 10);
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('You can only select up to 10 images.')),
-          );
-        }
-      });
+void _showAddActivityBottomSheet() {
+  showModalBottomSheet(
+    context: context,
+    isScrollControlled: true,
+    backgroundColor: Colors.transparent,
+    builder: (context) => StatefulBuilder(
+      builder: (context, setSheetState) => DraggableScrollableSheet(
+        initialChildSize: 0.9,
+        minChildSize: 0.5,
+        maxChildSize: 0.9,
+        builder: (_, controller) => Container(
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Padding(
+                padding: const EdgeInsets.all(16.0),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      'Add place',
+                      style: TextStyle(
+                        fontSize: 20,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    IconButton(
+                      icon: Icon(Icons.close),
+                      onPressed: () {
+                        _bottomSheetSearchController.clear();
+                        setSheetState(() {
+                          _predictions = [];
+                        });
+                        Navigator.pop(context);
+                      },
+                    ),
+                  ],
+                ),
+              ),
+              Divider(height: 1),
+              Padding(
+                padding: const EdgeInsets.all(16.0),
+                child: TextField(
+                  controller: _bottomSheetSearchController,
+                  decoration: InputDecoration(
+                    hintText: 'Search places',
+                    prefixIcon: Icon(Icons.search),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: BorderSide.none,
+                    ),
+                    filled: true,
+                    fillColor: Colors.grey[100],
+                  ),
+                  onChanged: (value) async {
+                    if (value.isNotEmpty) {
+                      try {
+                        var result = await googlePlace.autocomplete.get(
+                          value,
+                          components: [Component("country", "us")],
+                        );
+                        
+                        if (result != null && result.predictions != null) {
+                          setSheetState(() {
+                            _predictions = result.predictions!;
+                          });
+                        }
+                      } catch (e) {
+                        print("Error during places search: $e");
+                        setSheetState(() {
+                          _predictions = [];
+                        });
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(content: Text('Error fetching places: $e')),
+                        );
+                      }
+                    } else {
+                      setSheetState(() {
+                        _predictions = [];
+                      });
+                    }
+                  },
+                ),
+              ),
+              Expanded(
+                child: _predictions.isEmpty
+                    ? Center(
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(Icons.location_on_outlined, size: 48, color: Colors.grey),
+                            SizedBox(height: 16),
+                            Text(
+                              'Search a location to add to your post',
+                              style: TextStyle(
+                                color: Colors.grey[600],
+                                fontSize: 16,
+                              ),
+                            ),
+                          ],
+                        ),
+                      )
+                    : ListView.builder(
+                        controller: controller,
+                        itemCount: _predictions.length,
+                        itemBuilder: (context, index) {
+                          final prediction = _predictions[index];
+                          return ListTile(
+                            leading: Icon(Icons.location_on_outlined),
+                            title: Text(prediction.description ?? "Unknown"),
+                            onTap: () {
+                              _showActivityDescriptionDialog(
+                                context,
+                                prediction.description ?? "",
+                                prediction,  // Now passing the prediction object
+                              );
+                            },
+                          );
+                        },
+                      ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    ),
+  );
+}
+
+// Add this helper function to extract just the place name
+String _extractPlaceName(String fullAddress) {
+  // Split the address by comma and take the first part
+  return fullAddress.split(',')[0].trim();
+}
+
+// Update the _showActivityDescriptionDialog method
+void _showActivityDescriptionDialog(BuildContext context, String fullAddress, AutocompletePrediction prediction) async {
+  final descriptionController = TextEditingController();
+  final placeName = _extractPlaceName(fullAddress);
+  
+  // Get place details including coordinates
+  var result = await googlePlace.details.get(prediction.placeId ?? '');
+  Map<String, double>? location;
+  
+  if (result != null && result.result != null) {
+    final lat = result.result?.geometry?.location?.lat;
+    final lng = result.result?.geometry?.location?.lng;
+    if (lat != null && lng != null) {
+      location = {
+        'lat': lat,
+        'lng': lng
+      };
     }
   }
 
+  showDialog(
+    context: context,
+    builder: (context) => AlertDialog(
+      title: Text('Add description'),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            placeName,
+            style: TextStyle(
+              fontWeight: FontWeight.bold,
+              fontSize: 16,
+            ),
+          ),
+          SizedBox(height: 16),
+          TextField(
+            controller: descriptionController,
+            decoration: InputDecoration(
+              hintText: 'Write something about this place...',
+              border: OutlineInputBorder(),
+            ),
+            maxLines: 3,
+          ),
+        ],
+      ),
+      actions: [
+        TextButton(
+          child: Text('Cancel'),
+          onPressed: () => Navigator.pop(context),
+        ),
+        TextButton(
+          child: Text('Add'),
+          onPressed: () {
+            setState(() {
+              _activities.add(Activity(
+                name: placeName,
+                description: descriptionController.text.trim(),
+                placeDescription: fullAddress,
+                location: location,  // Add location data
+              ));
+              _updateDescription();
+            });
+            Navigator.pop(context);
+            Navigator.pop(context);
+            
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text('Added $placeName'),
+                duration: Duration(seconds: 2),
+              ),
+            );
+          },
+        ),
+      ],
+    ),
+  );
+}
+
+void _onSearchChanged() async {
+  print("Searching for: ${_bottomSheetSearchController.text}");
+  if (_bottomSheetSearchController.text.isNotEmpty) {
+    try {
+      var result = await googlePlace.autocomplete.get(
+        _bottomSheetSearchController.text,
+        components: [Component("country", "us")],
+      );
+      
+      if (result != null && result.predictions != null && mounted) {
+        setState(() {
+          _predictions = result.predictions!;
+          print("Predictions updated: ${_predictions.length} results");
+        });
+      } else {
+        setState(() {
+          _predictions = [];
+        });
+      }
+    } catch (e) {
+      print("Error during places search: $e");
+      setState(() {
+        _predictions = [];
+      });
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error fetching places: $e')),
+        );
+      }
+    }
+  } else {
+    setState(() {
+      _predictions = [];
+    });
+  }
+}
+
+//og code to update the descirption with the activities
+
+/* void _updateDescription() {
+  // Build the complete description for storage
+  String finalDescription = _userDescription;
+  
+  if (_activities.isNotEmpty && _userDescription.isNotEmpty) {
+    finalDescription += '\n\n';
+  }
+  
+  // Add activities in plain text format for storage
+  for (var activity in _activities) {
+    if (activity.description.isNotEmpty) {
+      finalDescription += '📍 ${activity.name}: ${activity.description}\n';
+    } else {
+      finalDescription += '📍 ${activity.name}\n';
+    }
+  }
+  
+  setState(() {
+    _description = finalDescription.trim();
+  });
+} */
+
+//remove the activity from the desc.
+void _updateDescription() {
+  // Only use the user's manual description
+  setState(() {
+    _description = _userDescription.trim();
+  });
+}
+
+/* // Don't forget to dispose of the controller in the dispose method
+@override
+void dispose() {
+  _descriptionController.dispose();
+  _bottomSheetSearchController.dispose();
+  super.dispose();
+} */
+
+Future<void> _getImages() async {
+  try {
+    Navigator.push<List<XFile>>(
+      context,
+      MaterialPageRoute(
+        builder: (context) => CustomPhotoSelector(
+          onImagesSelected: (selectedImages) {
+            Navigator.pop(context, selectedImages); // Return selected images to this page
+          },
+        ),
+      ),
+    ).then((selectedImages) async {
+      if (selectedImages != null && selectedImages.isNotEmpty) {
+        final editedImages = await Navigator.push<List<XFile>>(
+          context,
+          MaterialPageRoute(
+            builder: (context) => PhotoEditorPage(
+              images: selectedImages,
+            ),
+          ),
+        );
+        
+        if (editedImages != null && mounted) {
+          setState(() {
+            _images = editedImages;
+          });
+        }
+      }
+    });
+  } catch (e) {
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error selecting images: $e')),
+      );
+    }
+    print('Error selecting images: $e');
+  }
+}
 Future<void> _createPost() async {
   if (_formKey.currentState!.validate() && _images.isNotEmpty) {
     setState(() {
@@ -314,6 +727,18 @@ Future<void> _createPost() async {
 
       String username = userDoc['username'];
 
+      // Format activities using only provided data
+// In _createPost method, update the formattedActivities mapping:
+List<Map<String, dynamic>> formattedActivities = _activities.map((activity) {
+  return {
+    'name': activity.name,
+    'description': activity.description,
+    'placeDescription': activity.placeDescription,
+    'location': activity.location,  // Add this line
+  };
+}).toList();
+
+      // Create the post document with only necessary fields
       Map<String, dynamic> postData = {
         'userId': currentUser.uid,
         'title': _title,
@@ -321,18 +746,13 @@ Future<void> _createPost() async {
         'imageUrls': imageUrls,
         'createdAt': FieldValue.serverTimestamp(),
         'username': username,
-        'likes': 0,
         'category': _selectedCategory,
         'city': _selectedCity,
-        'postType': _postType == PostType.single ? 'single' : 'itinerary',
-        'isCompleted': false,  // Add this line
+        'likes': 0,
+        'activities': formattedActivities,
       };
 
-      if (_postType == PostType.itinerary) {
-        postData['itinerary'] = _itineraryDays.map((day) => day.toMap()).toList();
-      }
-
-      await FirebaseFirestore.instance.collection('social_posts').add(postData);
+      await FirebaseFirestore.instance.collection('posts').add(postData);
 
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Post created successfully')),
@@ -359,7 +779,7 @@ Future<void> _createPost() async {
   Future<List<String>> _uploadImages() async {
     List<String> imageUrls = [];
     for (var image in _images) {
-      String fileName = DateTime.now().millisecondsSinceEpoch.toString() + '_' + image.name;
+String fileName = DateTime.now().millisecondsSinceEpoch.toString() + '_' + image.name;
       Reference firebaseStorageRef = FirebaseStorage.instance.ref().child('posts/$fileName');
       await firebaseStorageRef.putFile(File(image.path));
       String imageUrl = await firebaseStorageRef.getDownloadURL();
@@ -369,242 +789,26 @@ Future<void> _createPost() async {
   }
 }
 
-class ItineraryDay {
-  List<Activity> activities;
-
-  ItineraryDay({required this.activities});
-
-  Map<String, dynamic> toMap() {
-    return {
-      'activities': activities.map((activity) => activity.toMap()).toList(),
-    };
-  }
-}
-
 class Activity {
-  String name = '';
-  String description = '';
-  LatLng? location;
-  String? placeDescription;  // Add this field to store place description
+  final String name;
+  final String description;
+  final String? placeDescription;
+  final Map<String, double>? location;  // Add location field
+  final Key key;
+
+  Activity({
+    required this.name,
+    this.description = '',
+    this.placeDescription,
+    this.location,  // Add to constructor
+  }) : key = UniqueKey();
 
   Map<String, dynamic> toMap() {
     return {
       'name': name,
       'description': description,
-      'location': location != null ? GeoPoint(location!.latitude, location!.longitude) : null,
-      'placeDescription': placeDescription,  // Store place description
+      'placeDescription': placeDescription,
+      'location': location,  // Include in map
     };
   }
-}
-
-
-class LocationPickerPage extends StatefulWidget {
-  final LatLng? initialLocation;
-  final String apiKey;
-  final Activity activity;  // Add this field to accept the activity
-
-  LocationPickerPage({
-    this.initialLocation,
-    required this.apiKey,
-    required this.activity,  // Initialize it here
-  });
-
-  @override
-  _LocationPickerPageState createState() => _LocationPickerPageState();
-}
-
-
-class _LocationPickerPageState extends State<LocationPickerPage> {
-  late GoogleMapController _mapController;
-  LatLng? _selectedLocation;
-  final _searchController = TextEditingController();
-  List<AutocompletePrediction> _predictions = [];
-  late GooglePlace googlePlace;
-
- @override
-void initState() {
-  super.initState();
-  _selectedLocation = widget.initialLocation;
-  if (_selectedLocation == null) {
-    _getCurrentLocation();
-  }
-  googlePlace = GooglePlace(widget.apiKey);
-}
-
-
-  Future<void> _getCurrentLocation() async {
-    bool serviceEnabled;
-    LocationPermission permission;
-
-    serviceEnabled = await Geolocator.isLocationServiceEnabled();
-    if (!serviceEnabled) {
-      return Future.error('Location services are disabled.');
-    }
-
-    permission = await Geolocator.checkPermission();
-    if (permission == LocationPermission.denied) {
-      permission = await Geolocator.requestPermission();
-      if (permission == LocationPermission.denied) {
-        return Future.error('Location permissions are denied');
-      }
-    }
-    
-    if (permission == LocationPermission.deniedForever) {
-      return Future.error('Location permissions are permanently denied');
-    } 
-
-    try {
-      Position position = await Geolocator.getCurrentPosition(
-        desiredAccuracy: LocationAccuracy.high,
-      );
-      setState(() {
-        _selectedLocation = LatLng(position.latitude, position.longitude);
-      });
-    } catch (e) {
-      print("Error getting current location: $e");
-      setState(() {
-        _selectedLocation = LatLng(0, 0); // Default to null island
-      });
-    }
-  }
-
-void _onSearchChanged() async {
-  if (_searchController.text.isNotEmpty) {
-    try {
-      var result = await googlePlace.autocomplete.get(_searchController.text);
-      if (result != null && result.predictions != null && mounted) {
-        setState(() {
-          _predictions = result.predictions!;
-        });
-      } else {
-        // Handle the case where no predictions are found
-        print("No predictions found");
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('No places found')));
-      }
-    } catch (e) {
-      // Handle any errors that occur during the search request
-      print("Error during places search: $e");
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error fetching places: $e')));
-    }
-  } else {
-    setState(() {
-      _predictions = [];
-    });
-  }
-}
-
-
-Widget _buildSearchBar() {
-  return Padding(
-    padding: const EdgeInsets.all(8.0),
-    child: Column(
-      children: [
-        TextField(
-          controller: _searchController,
-          decoration: InputDecoration(
-            hintText: 'Search for a location',
-            prefixIcon: Icon(Icons.search),
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(8),
-            ),
-          ),
-          onChanged: (value) {
-            _onSearchChanged();
-          },
-        ),
-        if (_predictions.isNotEmpty)
-          Container(
-            height: 200, // Set a max height for the dropdown
-            color: Colors.white,
-            child: ListView.builder(
-              itemCount: _predictions.length,
-              itemBuilder: (context, index) {
-                return ListTile(
-                  leading: Icon(Icons.location_on),
-                  title: Text(_predictions[index].description!),
-                  onTap: () {
-                    _selectSearchResult(_predictions[index]);
-                  },
-                );
-              },
-            ),
-          ),
-      ],
-    ),
-  );
-}
-
-
-void _selectSearchResult(AutocompletePrediction prediction) async {
-  final details = await googlePlace.details.get(prediction.placeId!);
-  if (details != null && details.result != null && mounted) {
-    final lat = details.result!.geometry!.location!.lat;
-    final lng = details.result!.geometry!.location!.lng;
-    setState(() {
-      _selectedLocation = LatLng(lat!, lng!);
-      _predictions = [];
-      _searchController.text = prediction.description!;
-
-      // Modify the passed activity's location and placeDescription
-      widget.activity.location = LatLng(lat!, lng!);
-      widget.activity.placeDescription = prediction.description;
-    });
-    _mapController.animateCamera(CameraUpdate.newLatLng(_selectedLocation!));
-  }
-}
-
-
-
-@override
-Widget build(BuildContext context) {
-  return Scaffold(
-    appBar: AppBar(
-      title: Text('Select Location'),
-      actions: [
-        IconButton(
-          icon: Icon(Icons.check),
-          onPressed: () {
-            Navigator.pop(context, _selectedLocation);
-          },
-        ),
-      ],
-    ),
-    body: Column(
-      children: [
-        _buildSearchBar(),
-        Expanded(
-          child: Stack(
-            children: [
-              _selectedLocation == null
-                  ? Center(child: CircularProgressIndicator())
-                  : GoogleMap(
-                      initialCameraPosition: CameraPosition(
-                        target: _selectedLocation!,
-                        zoom: 14.0,
-                      ),
-                      onMapCreated: (GoogleMapController controller) {
-                        _mapController = controller;
-                      },
-                      onTap: (LatLng location) {
-                        setState(() {
-                          _selectedLocation = location;
-                        });
-                      },
-                      markers: _selectedLocation != null
-                          ? {
-                              Marker(
-                                markerId: MarkerId('selected_location'),
-                                position: _selectedLocation!,
-                              ),
-                            }
-                          : {},
-                    ),
-            ],
-          ),
-        ),
-      ],
-    ),
-  );
-}
-
 }

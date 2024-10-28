@@ -300,19 +300,51 @@ void _sharePost() {
   );
 }
 
+// In post_detail_page.dart, modify the _saveSharedPost function:
+
 void _saveSharedPost(String caption, bool isGroupActivity) async {
   try {
     final data = widget.post.data() as Map<String, dynamic>;
     String groupId = '';
 
+    // Properly handle activities with location data
+    List<Map<String, dynamic>> processedActivities = [];
+    if (data['activities'] != null) {
+      for (var activity in data['activities']) {
+        Map<String, dynamic> processedActivity = Map<String, dynamic>.from(activity);
+        
+        // Ensure location data is properly structured
+        if (activity['location'] != null) {
+          // If location is a GeoPoint, convert it to a map with lat/lng
+          if (activity['location'] is GeoPoint) {
+            GeoPoint geoPoint = activity['location'];
+            processedActivity['location'] = {
+              'lat': geoPoint.latitude,
+              'lng': geoPoint.longitude
+            };
+          } 
+          // If location is already a map, keep it as is
+          else if (activity['location'] is Map) {
+            processedActivity['location'] = Map<String, dynamic>.from(activity['location']);
+          }
+        }
+        processedActivities.add(processedActivity);
+      }
+    }
+
     if (isGroupActivity) {
-      // Create a new group document
+      // Create a new group document with processed activities
       DocumentReference groupRef = await FirebaseFirestore.instance.collection('groups').add({
         'title': data['title'],
         'description': data['description'],
         'imageUrls': data['imageUrls'],
         'members': [FirebaseAuth.instance.currentUser!.uid],
         'createdAt': FieldValue.serverTimestamp(),
+        'originalPostId': widget.post.id,
+        'postType': data['postType'],
+        'itinerary': data['itinerary'],
+        'activities': processedActivities, // Use processed activities
+        'date': null,
       });
       groupId = groupRef.id;
     }
@@ -327,12 +359,13 @@ void _saveSharedPost(String caption, bool isGroupActivity) async {
       'imageUrls': data['imageUrls'],
       'postType': data['postType'],
       'itinerary': data['itinerary'],
+      'activities': processedActivities, // Use processed activities
       'isGroupActivity': isGroupActivity,
       'groupId': isGroupActivity ? groupId : null,
       'groupMembers': isGroupActivity ? [FirebaseAuth.instance.currentUser!.uid] : [],
       'likes': 0,
       'comments': 0,
-      'isCompleted': false,  // Add this line
+      'isCompleted': false,
     };
 
     await FirebaseFirestore.instance.collection('social_posts').add(sharedPostData);
@@ -392,57 +425,102 @@ void _saveSharedPost(String caption, bool isGroupActivity) async {
     return userDoc['username'] ?? 'Unknown User';
   }
 
-  Future<Set<Marker>> _createNumberedMarkers(List<dynamic> itinerary) async {
-    Set<Marker> markers = {};
-    int markerNumber = 1;
+Future<Set<Marker>> _createNumberedMarkers(List<dynamic> activities) async {
+  Set<Marker> markers = {};
+  int markerNumber = 1;
 
-    for (var day in itinerary) {
-      for (var activity in day['activities']) {
-        if (activity['location'] != null) {
-          GeoPoint location = activity['location'];
-          LatLng latLng = LatLng(location.latitude, location.longitude);
+  for (var activity in activities) {
+    if (activity['location'] != null) {
+      final location = activity['location'] as Map<String, dynamic>;
+      final lat = location['lat'] as double;
+      final lng = location['lng'] as double;
+      
+      markers.add(Marker(
+        markerId: MarkerId('${activity['name']}'),
+        position: LatLng(lat, lng),
+        icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueAzure),
+        infoWindow: InfoWindow(
+          title: "$markerNumber. ${activity['name']}", // Add number to the title
+          snippet: activity['description']
+        ),
+      ));
 
-          final Uint8List markerIcon = await _getMarkerIcon(markerNumber);
-          
-          markers.add(Marker(
-            markerId: MarkerId('${activity['name']}'),
-            position: latLng,
-            icon: BitmapDescriptor.fromBytes(markerIcon),
-            infoWindow: InfoWindow(title: activity['name']),
-          ));
-
-          markerNumber++;
-        }
-      }
+      markerNumber++;
     }
-
-    return markers;
   }
 
-  Future<Uint8List> _getMarkerIcon(int number) async {
-    final ui.PictureRecorder pictureRecorder = ui.PictureRecorder();
-    final Canvas canvas = Canvas(pictureRecorder);
-    final Paint paint = Paint()..color = Colors.blue;
-    final TextPainter textPainter = TextPainter(
-      text: TextSpan(
-        text: number.toString(),
-        style: TextStyle(fontSize: 30, color: Colors.white, fontWeight: FontWeight.bold),
+  return markers;
+}
+
+//custom pins on map
+/* Future<Uint8List> _getMarkerIcon(int number) async {
+  final ui.PictureRecorder pictureRecorder = ui.PictureRecorder();
+  final Canvas canvas = Canvas(pictureRecorder);
+  
+  // Pin dimensions
+  final double markerWidth = 48;
+  final double markerHeight = 68;
+  final double pinHeadRadius = 22;
+  final double pinPointHeight = 24;
+  
+  final Paint pinPaint = Paint()
+    ..color = Colors.blue
+    ..style = PaintingStyle.fill;
+
+  // Draw pin shadow
+  final Paint shadowPaint = Paint()
+    ..color = Colors.black.withOpacity(0.3)
+    ..maskFilter = MaskFilter.blur(BlurStyle.normal, 2);
+
+  // Calculate center points
+  final topCenter = Offset(markerWidth / 2, pinHeadRadius);
+  
+  // Create pin path
+  final path = Path()
+    ..addOval(Rect.fromCircle(center: topCenter, radius: pinHeadRadius))
+    ..moveTo(topCenter.dx - pinHeadRadius * 0.7, topCenter.dy + pinHeadRadius * 0.6)
+    ..quadraticBezierTo(
+      topCenter.dx, 
+      topCenter.dy + pinPointHeight * 1.4,
+      topCenter.dx + pinHeadRadius * 0.7,
+      topCenter.dy + pinHeadRadius * 0.6
+    );
+  
+  // Draw shadow and pin
+  canvas.drawPath(path, shadowPaint);
+  canvas.drawPath(path, pinPaint);
+  
+  // Draw number
+  final TextPainter textPainter = TextPainter(
+    text: TextSpan(
+      text: number.toString(),
+      style: TextStyle(
+        fontSize: 28,
+        color: Colors.white,
+        fontWeight: FontWeight.bold,
       ),
-      textDirection: TextDirection.ltr,
-    );
+    ),
+    textDirection: TextDirection.ltr,
+  );
+  
+  textPainter.layout();
+  textPainter.paint(
+    canvas,
+    Offset(
+      topCenter.dx - textPainter.width / 2,
+      topCenter.dy - textPainter.height / 2,
+    ),
+  );
 
-    canvas.drawCircle(Offset(24, 24), 24, paint);
-    textPainter.layout();
-    textPainter.paint(
-      canvas,
-      Offset(24 - textPainter.width / 2, 24 - textPainter.height / 2),
-    );
-
-    final img = await pictureRecorder.endRecording().toImage(48, 48);
-    final data = await img.toByteData(format: ui.ImageByteFormat.png);
-    return data!.buffer.asUint8List();
-  }
-
+  // Convert to image
+  final img = await pictureRecorder.endRecording().toImage(
+    markerWidth.toInt(),
+    markerHeight.toInt(),
+  );
+  final data = await img.toByteData(format: ui.ImageByteFormat.png);
+  return data!.buffer.asUint8List();
+}
+ */
   @override
 Widget build(BuildContext context) {
     final data = widget.post.data() as Map<String, dynamic>;
@@ -617,97 +695,185 @@ Widget build(BuildContext context) {
       );
     }
   }
-
-  Widget _buildPostDetails(String title, String description, String postType) {
-    final createdAt = widget.post['createdAt'] as Timestamp?;
-    return Padding(
-      padding: const EdgeInsets.all(16.0),
-      child: Column(
+Widget _buildActivityList(List<dynamic> activities) {
+  return Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: activities.map((activity) {
+      return Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          // Only show the ActivityCard, remove the RichText section
+          ActivityCard(activity: activity),
+          SizedBox(height: 8),
+        ],
+      );
+    }).toList(),
+  );
+}
+
+Widget _buildPostDetails(String title, String description, String postType) {
+  final createdAt = widget.post['createdAt'] as Timestamp?;
+  final data = widget.post.data() as Map<String, dynamic>;
+  final activities = data['activities'] as List<dynamic>?;
+
+  // Create a map to track unique activities by name
+  final uniqueActivities = <String, dynamic>{};
+  activities?.forEach((activity) {
+    if (!uniqueActivities.containsKey(activity['name'])) {
+      uniqueActivities[activity['name']] = activity;
+    }
+  });
+
+  return Padding(
+    padding: const EdgeInsets.all(16.0),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          title,
+          style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+        ),
+        SizedBox(height: 8),
+        Text(
+          description.isNotEmpty ? description : 'No description available',
+          style: TextStyle(fontSize: 16),
+        ),
+        SizedBox(height: 16),
+        if (activities != null && activities.isNotEmpty) ...[
+          // Show only unique activities
+          ...uniqueActivities.values.map((activity) {
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('📍 ', style: TextStyle(fontSize: 16)),
+                    Expanded(
+                      child: Text(
+                        '${activity['name']}: ${activity['description']}',
+                        style: TextStyle(fontSize: 16),
+                      ),
+                    ),
+                  ],
+                ),
+                SizedBox(height: 8),
+                Container(
+                  margin: EdgeInsets.only(bottom: 16),
+                  padding: EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: Colors.grey[300]!),
+                  ),
+                  child: Row(
+                    children: [
+                      Container(
+                        width: 24,
+                        height: 24,
+                        decoration: BoxDecoration(
+                          color: Colors.brown[400],
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                        child: Icon(
+                          Icons.location_on,
+                          color: Colors.white,
+                          size: 16,
+                        ),
+                      ),
+                      SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              activity['name'] ?? '',
+                              style: TextStyle(
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                            if (activity['placeDescription'] != null)
+                              Text(
+                                activity['placeDescription'],
+                                style: TextStyle(
+                                  color: Colors.grey[600],
+                                  fontSize: 14,
+                                ),
+                              ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            );
+          }).toList(),
           Text(
-            title,
-            style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+            'Activity Overview',
+            style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
           ),
           SizedBox(height: 8),
-          Text(
-            description.isNotEmpty ? description : 'No description available',
-            style: TextStyle(fontSize: 16),
-          ),
+          _buildOverviewMap(),
           SizedBox(height: 16),
-          if (postType == 'itinerary')
-            _buildOverviewMap(),
-          if (postType == 'itinerary')
-            _buildItineraryDetails(),
-          SizedBox(height: 16),
-          Text(
-            _formatPostTime(createdAt ?? Timestamp.now()),
-            style: TextStyle(color: Colors.grey, fontSize: 14),
-          ),
         ],
-      ),
-    );
+        Text(
+          _formatPostTime(createdAt ?? Timestamp.now()),
+          style: TextStyle(color: Colors.grey, fontSize: 14),
+        ),
+      ],
+    ),
+  );
+}
+
+Widget _buildOverviewMap() {
+  final data = widget.post.data() as Map<String, dynamic>;
+  final activities = data['activities'] as List<dynamic>?;
+
+  if (activities == null || activities.isEmpty) {
+    return SizedBox.shrink();
   }
 
-  Widget _buildOverviewMap() {
-    final data = widget.post.data() as Map<String, dynamic>;
-    final itinerary = data['itinerary'] as List<dynamic>?;
+  return FutureBuilder<Set<Marker>>(
+    future: _createNumberedMarkers(activities),
+    builder: (context, snapshot) {
+      if (snapshot.connectionState == ConnectionState.waiting) {
+        return CircularProgressIndicator();
+      }
 
-    if (itinerary == null || itinerary.isEmpty) {
-      return SizedBox.shrink();
-    }
+      if (snapshot.hasError) {
+        return Text('Error: ${snapshot.error}');
+      }
 
-    return FutureBuilder<Set<Marker>>(
-      future: _createNumberedMarkers(itinerary),
-      builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting) {
-          return CircularProgressIndicator();
-        }
+      Set<Marker> markers = snapshot.data ?? {};
+      List<LatLng> points = markers.map((marker) => marker.position).toList();
 
-        if (snapshot.hasError) {
-          return Text('Error: ${snapshot.error}');
-        }
+      if (points.isEmpty) {
+        return SizedBox.shrink();
+      }
 
-        Set<Marker> markers = snapshot.data ?? {};
-        List<LatLng> points = markers.map((marker) => marker.position).toList();
+      LatLngBounds bounds = _calculateBounds(points);
+      LatLng center = _calculateCenter(bounds);
 
-        if (points.isEmpty) {
-          return SizedBox.shrink();
-        }
-
-        LatLngBounds bounds = _calculateBounds(points);
-        LatLng center = _calculateCenter(bounds);
-
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'Itinerary Overview',
-              style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-            ),
-            SizedBox(height: 8),
-            Container(
-              height: 200,
-              child: GoogleMap(
-                initialCameraPosition: CameraPosition(
-                  target: center,
-                  zoom: 10,
-                ),
-                markers: markers,
-                onMapCreated: (GoogleMapController controller) {
-                  controller.animateCamera(CameraUpdate.newLatLngBounds(bounds, 50));
-                },
-                zoomControlsEnabled: false,
-                mapToolbarEnabled: false,
-                myLocationButtonEnabled: false,
-              ),
-            ),
-            SizedBox(height: 16),
-          ],
-        );
-      },
-    );
-  }
+      return Container(
+        height: 200,
+        child: GoogleMap(
+          initialCameraPosition: CameraPosition(
+            target: center,
+            zoom: 10,
+          ),
+          markers: markers,
+          onMapCreated: (GoogleMapController controller) {
+            controller.animateCamera(CameraUpdate.newLatLngBounds(bounds, 50));
+          },
+          zoomControlsEnabled: false,
+          mapToolbarEnabled: false,
+          myLocationButtonEnabled: false,
+        ),
+      );
+    },
+  );
+}
 
   LatLngBounds _calculateBounds(List<LatLng> points) {
     double minLat = points[0].latitude;
@@ -1162,6 +1328,92 @@ Widget _buildActionBar() {
   }
 }
 
+// activity_card.dart
+class ActivityCard extends StatelessWidget {
+  final Map<String, dynamic> activity;
+  final String? placeId;
+
+  ActivityCard({
+    required this.activity,
+    this.placeId,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Container(
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: Colors.grey.shade200),
+        ),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(12),
+          onTap: () {
+            // Will add Google Places detail view later
+          },
+          child: Padding(
+            padding: const EdgeInsets.all(8.0),
+            child: Row(
+              children: [
+                // Square image
+                Container(
+                  width: 60,
+                  height: 60,
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(8),
+                    color: Colors.brown[400],
+                  ),
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(8),
+                    child: activity['photoUrl'] != null
+                        ? Image.network(
+                            activity['photoUrl'],
+                            fit: BoxFit.cover,
+                            errorBuilder: (context, error, stackTrace) =>
+                                Icon(Icons.place, color: Colors.white, size: 24),
+                          )
+                        : Icon(Icons.place, color: Colors.white, size: 24),
+                  ),
+                ),
+                SizedBox(width: 12),
+                // Text content
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        activity['name'] ?? '',
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                      if (activity['placeDescription'] != null) ...[
+                        SizedBox(height: 2),
+                        Text(
+                          activity['placeDescription'],
+                          style: TextStyle(
+                            color: Colors.grey[600],
+                            fontSize: 14,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class Comment {
   final String id;
   final String userId;
@@ -1189,4 +1441,194 @@ class Comment {
   }
 }
 
+void _showPlaceDetails(BuildContext context, Map<String, dynamic> activity) {
+  showModalBottomSheet(
+    context: context,
+    isScrollControlled: true,
+    backgroundColor: Colors.transparent,
+    builder: (context) => DraggableScrollableSheet(
+      initialChildSize: 0.9,
+      minChildSize: 0.5,
+      maxChildSize: 0.95,
+      builder: (_, controller) => Container(
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            // Image carousel
+            Container(
+              height: 300,
+              child: Stack(
+                children: [
+                  CarouselSlider(
+                    options: CarouselOptions(
+                      height: 300,
+                      viewportFraction: 1.0,
+                      enableInfiniteScroll: false,
+                    ),
+                    items: [1, 2, 3].map((i) => Container(
+                      decoration: BoxDecoration(
+                        image: DecorationImage(
+                          image: NetworkImage(activity['photoUrl'] ?? 'placeholder_url'),
+                          fit: BoxFit.cover,
+                        ),
+                      ),
+                    )).toList(),
+                  ),
+                  // Share button
+                  Positioned(
+                    top: 16,
+                    right: 16,
+                    child: CircleAvatar(
+                      backgroundColor: Colors.white,
+                      child: IconButton(
+                        icon: Icon(Icons.share, color: Colors.black),
+                        onPressed: () {
+                          // Implement share functionality
+                        },
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Expanded(
+              child: SingleChildScrollView(
+                controller: controller,
+                child: Padding(
+                  padding: const EdgeInsets.all(16.0),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // Title and rating
+                      Text(
+                        activity['name'] ?? '',
+                        style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+                      ),
+                      SizedBox(height: 8),
+                      Row(
+                        children: [
+                          Text(
+                            activity['placeDescription'] ?? '',
+                            style: TextStyle(color: Colors.grey[600]),
+                          ),
+                          Icon(Icons.star, color: Colors.amber, size: 16),
+                          Text('4.7 (12100)', style: TextStyle(color: Colors.grey[600])),
+                        ],
+                      ),
+                      SizedBox(height: 16),
+                      // Status
+                      Row(
+                        children: [
+                          Container(
+                            padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                            decoration: BoxDecoration(
+                              color: Colors.red[50],
+                              borderRadius: BorderRadius.circular(4),
+                            ),
+                            child: Text(
+                              'Closed',
+                              style: TextStyle(color: Colors.red),
+                            ),
+                          ),
+                          SizedBox(width: 8),
+                          Text('• Closed Tomorrow', style: TextStyle(color: Colors.grey[600])),
+                        ],
+                      ),
+                      SizedBox(height: 16),
+                      // Description
+                      Text(
+                        activity['description'] ?? '',
+                        style: TextStyle(fontSize: 16),
+                      ),
+                      SizedBox(height: 24),
+                      // Action buttons
+                      Row(
+                        children: [
+                          Expanded(
+                            child: ElevatedButton.icon(
+                              icon: Icon(Icons.directions),
+                              label: Text('Directions'),
+                              onPressed: () {
+                                // Implement directions
+                              },
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: Colors.white,
+                                foregroundColor: Colors.blue,
+                                elevation: 0,
+                                side: BorderSide(color: Colors.grey[300]!),
+                              ),
+                            ),
+                          ),
+                          SizedBox(width: 8),
+                          Expanded(
+                            child: ElevatedButton.icon(
+                              icon: Icon(Icons.language),
+                              label: Text('Website'),
+                              onPressed: () {
+                                // Implement website navigation
+                              },
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: Colors.white,
+                                foregroundColor: Colors.blue,
+                                elevation: 0,
+                                side: BorderSide(color: Colors.grey[300]!),
+                              ),
+                            ),
+                          ),
+                          SizedBox(width: 8),
+                          Expanded(
+                            child: ElevatedButton.icon(
+                              icon: Icon(Icons.phone),
+                              label: Text('Call'),
+                              onPressed: () {
+                                // Implement call
+                              },
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: Colors.white,
+                                foregroundColor: Colors.blue,
+                                elevation: 0,
+                                side: BorderSide(color: Colors.grey[300]!),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      SizedBox(height: 24),
+                      // Featured section
+                      Text(
+                        'Featured in...',
+                        style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                      ),
+                      SizedBox(height: 16),
+                      // Featured card (similar to your screenshot)
+                      Card(
+                        child: ListTile(
+                          leading: ClipRRect(
+                            borderRadius: BorderRadius.circular(8),
+                            child: Image.network(
+                              activity['photoUrl'] ?? 'placeholder_url',
+                              width: 60,
+                              height: 60,
+                              fit: BoxFit.cover,
+                            ),
+                          ),
+                          title: Text('Featured Activity Title'),
+                          subtitle: Text('By Author Name'),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    ),
+  );
+}
 
