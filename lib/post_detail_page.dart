@@ -209,86 +209,245 @@ void _sharePost() {
   String caption = '';
   bool isGroupActivity = false;
 
-  showDialog(
+  showModalBottomSheet(
     context: context,
+    isScrollControlled: true,
+    backgroundColor: Colors.transparent,
     builder: (BuildContext context) {
       return StatefulBuilder(
         builder: (context, setState) {
-          return Dialog(
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(20),
-            ),
+          // Get the keyboard height and safe area
+          final keyboardHeight = MediaQuery.of(context).viewInsets.bottom;
+          final safePadding = MediaQuery.of(context).padding;
+
+          return GestureDetector(
+            // Dismiss keyboard when tapping outside of text field
+            onTap: () => FocusScope.of(context).unfocus(),
             child: Container(
-              padding: EdgeInsets.all(20),
+              height: MediaQuery.of(context).size.height * 0.85,
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+              ),
               child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    'Share this post',
-                    style: TextStyle(
-                      fontSize: 20,
-                      fontWeight: FontWeight.bold,
+                  // Drag Handle
+                  Container(
+                    margin: EdgeInsets.only(top: 12),
+                    width: 40,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: Colors.grey[300],
+                      borderRadius: BorderRadius.circular(2),
                     ),
                   ),
-                  SizedBox(height: 20),
-                  TextField(
-                    onChanged: (value) {
-                      caption = value;
-                    },
-                    decoration: InputDecoration(
-                      hintText: 'Add a caption...',
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(10),
-                        borderSide: BorderSide(color: Colors.grey[300]!),
-                      ),
-                      focusedBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(10),
-                        borderSide: BorderSide(color: Colors.blue),
-                      ),
-                    ),
-                    maxLines: 3,
-                  ),
-                  SizedBox(height: 20),
-                  Row(
-                    children: [
-                      Checkbox(
-                        value: isGroupActivity,
-                        onChanged: (value) {
-                          setState(() {
-                            isGroupActivity = value!;
-                          });
-                        },
-                      ),
-                      Text('Allow friends to join group'),
-                    ],
-                  ),
-                  SizedBox(height: 20),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.end,
-                    children: [
-                      TextButton(
-                        child: Text('Cancel'),
-                        onPressed: () {
-                          Navigator.of(context).pop();
-                        },
-                      ),
-                      SizedBox(width: 10),
-                      ElevatedButton(
-                        child: Text('Share'),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.blue,
-                          foregroundColor: Colors.white,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(20),
+                  
+                  // Header
+                  Padding(
+                    padding: EdgeInsets.all(16),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(
+                          'Share this experience',
+                          style: TextStyle(
+                            fontSize: 20,
+                            fontWeight: FontWeight.bold,
                           ),
                         ),
+                        IconButton(
+                          icon: Icon(Icons.close, color: Colors.grey[600]),
+                          onPressed: () => Navigator.of(context).pop(),
+                        ),
+                      ],
+                    ),
+                  ),
+                  
+                  Divider(height: 1),
+                  
+                  // Scrollable Content
+                  Expanded(
+                    child: SingleChildScrollView(
+                      padding: EdgeInsets.all(16),
+                      // Add padding to account for keyboard
+                      child: Padding(
+                        padding: EdgeInsets.only(bottom: keyboardHeight),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            // Post Preview
+                            Container(
+                              decoration: BoxDecoration(
+                                borderRadius: BorderRadius.circular(12),
+                                color: Colors.grey[100],
+                              ),
+                              padding: EdgeInsets.all(12),
+                              child: Row(
+                                children: [
+                                  ClipRRect(
+                                    borderRadius: BorderRadius.circular(8),
+                                    child: Image.network(
+                                      (widget.post.data() as Map<String, dynamic>)['imageUrls'][0],
+                                      width: 60,
+                                      height: 60,
+                                      fit: BoxFit.cover,
+                                    ),
+                                  ),
+                                  SizedBox(width: 12),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          (widget.post.data() as Map<String, dynamic>)['title'],
+                                          style: TextStyle(
+                                            fontWeight: FontWeight.bold,
+                                            fontSize: 16,
+                                          ),
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                        SizedBox(height: 4),
+                                        Text(
+                                          'By @${(widget.post.data() as Map<String, dynamic>)['username']}',
+                                          style: TextStyle(
+                                            color: Colors.grey[600],
+                                            fontSize: 14,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            SizedBox(height: 24),
+                            
+                            // Caption Section
+                            Text(
+                              'Add your thoughts',
+                              style: TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                            SizedBox(height: 12),
+                            TextField(
+                              onChanged: (value) => caption = value,
+                              decoration: InputDecoration(
+                                hintText: 'Write a caption...',
+                                hintStyle: TextStyle(color: Colors.grey[500]),
+                                filled: true,
+                                fillColor: Colors.grey[100],
+                                border: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                  borderSide: BorderSide.none,
+                                ),
+                                contentPadding: EdgeInsets.symmetric(
+                                  horizontal: 16,
+                                  vertical: 12,
+                                ),
+                              ),
+                              maxLines: 3,
+                              style: TextStyle(fontSize: 16),
+                              // Add keyboard actions
+                              textInputAction: TextInputAction.done,
+                              onEditingComplete: () {
+                                FocusScope.of(context).unfocus();
+                              },
+                            ),
+                            SizedBox(height: 24),
+                            
+                            // Group Activity Section
+                            Text(
+                              'Activity Settings',
+                              style: TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                            SizedBox(height: 12),
+                            Container(
+                              decoration: BoxDecoration(
+                                borderRadius: BorderRadius.circular(12),
+                                color: Colors.grey[100],
+                              ),
+                              padding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                              child: Row(
+                                children: [
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          'Allow friends to join',
+                                          style: TextStyle(
+                                            fontWeight: FontWeight.w500,
+                                            fontSize: 16,
+                                          ),
+                                        ),
+                                        Text(
+                                          'Create a group activity others can join',
+                                          style: TextStyle(
+                                            color: Colors.grey[600],
+                                            fontSize: 14,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                  Switch(
+                                    value: isGroupActivity,
+                                    onChanged: (value) {
+                                      setState(() => isGroupActivity = value);
+                                    },
+                                    activeColor: Colors.blue,
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                  
+                  // Bottom Action Bar
+                  Container(
+                    padding: EdgeInsets.fromLTRB(16, 16, 16, 16 + safePadding.bottom),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      border: Border(
+                        top: BorderSide(
+                          color: Colors.grey[200]!,
+                          width: 1,
+                        ),
+                      ),
+                    ),
+                    child: SafeArea(
+                      child: ElevatedButton(
                         onPressed: () {
                           _saveSharedPost(caption, isGroupActivity);
                           Navigator.of(context).pop();
                         },
+                        child: Text(
+                          'Share',
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.black,
+                          foregroundColor: Colors.white,
+                          padding: EdgeInsets.symmetric(vertical: 16),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          minimumSize: Size(double.infinity, 50),
+                        ),
                       ),
-                    ],
+                    ),
                   ),
                 ],
               ),
@@ -615,87 +774,122 @@ Widget build(BuildContext context) {
     );
   }
 
-  Widget _buildImageSection(List<String> imageUrls) {
-    if (imageUrls.isEmpty) {
-      return Container(
-        height: 300,
-        color: Colors.grey,
-        child: Icon(Icons.image, color: Colors.white, size: 100),
-      );
-    } else if (imageUrls.length == 1) {
-      return Image.network(
+Widget _buildImageSection(List<String> imageUrls) {
+  if (imageUrls.isEmpty) {
+    return Container(
+      height: 300,
+      color: Colors.grey,
+      child: Icon(Icons.image, color: Colors.white, size: 100),
+    );
+  } else if (imageUrls.length == 1) {
+    return Container(
+      width: double.infinity,
+      constraints: BoxConstraints(
+        maxHeight: MediaQuery.of(context).size.height * 0.6, // Maximum 60% of screen height
+      ),
+      child: Image.network(
         imageUrls[0],
-        width: double.infinity,
-        height: 300,
-        fit: BoxFit.cover,
-      );
-    } else {
-      return Stack(
-        children: [
-          CarouselSlider(
-            options: CarouselOptions(
-              height: 300.0,
-              viewportFraction: 1.0,
-              enlargeCenterPage: false,
-              onPageChanged: (index, reason) {
-                setState(() {
-                  _currentImageIndex = index;
-                });
-              },
+        fit: BoxFit.contain, // Changed from cover to contain
+        loadingBuilder: (context, child, loadingProgress) {
+          if (loadingProgress == null) return child;
+          return Center(
+            child: CircularProgressIndicator(
+              value: loadingProgress.expectedTotalBytes != null
+                  ? loadingProgress.cumulativeBytesLoaded / loadingProgress.expectedTotalBytes!
+                  : null,
             ),
-            items: imageUrls.map((url) {
-              return Builder(
-                builder: (BuildContext context) {
-                  return Image.network(
+          );
+        },
+      ),
+    );
+  } else {
+    return Stack(
+      children: [
+        CarouselSlider(
+          options: CarouselOptions(
+            height: MediaQuery.of(context).size.height * 0.6, // Maximum 60% of screen height
+            viewportFraction: 1.0,
+            enlargeCenterPage: false,
+            enableInfiniteScroll: imageUrls.length > 1,
+            onPageChanged: (index, reason) {
+              setState(() {
+                _currentImageIndex = index;
+              });
+            },
+          ),
+          items: imageUrls.map((url) {
+            return Builder(
+              builder: (BuildContext context) {
+                return Container(
+                  width: MediaQuery.of(context).size.width,
+                  child: Image.network(
                     url,
-                    fit: BoxFit.cover,
-                    width: double.infinity,
-                  );
-                },
+                    fit: BoxFit.contain, // Changed from cover to contain
+                    loadingBuilder: (context, child, loadingProgress) {
+                      if (loadingProgress == null) return child;
+                      return Center(
+                        child: CircularProgressIndicator(
+                          value: loadingProgress.expectedTotalBytes != null
+                              ? loadingProgress.cumulativeBytesLoaded / loadingProgress.expectedTotalBytes!
+                              : null,
+                        ),
+                      );
+                    },
+                  ),
+                );
+              },
+            );
+          }).toList(),
+        ),
+        // Image counter indicator
+        if (imageUrls.length > 1) Positioned(
+          top: 16,
+          right: 16,
+          child: Container(
+            padding: EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+            decoration: BoxDecoration(
+              color: Colors.black.withOpacity(0.7),
+              borderRadius: BorderRadius.circular(16),
+            ),
+            child: Text(
+              '${_currentImageIndex + 1}/${imageUrls.length}',
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: 14,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ),
+        ),
+        // Pagination dots
+        if (imageUrls.length > 1) Positioned(
+          bottom: 16,
+          left: 0,
+          right: 0,
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: imageUrls.asMap().entries.map((entry) {
+              return Container(
+                width: 8.0,
+                height: 8.0,
+                margin: EdgeInsets.symmetric(horizontal: 4.0),
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: Colors.white.withOpacity(
+                    _currentImageIndex == entry.key ? 0.9 : 0.4,
+                  ),
+                ),
               );
             }).toList(),
           ),
-          Positioned(
-            top: 10,
-            right: 10,
-            child: Container(
-              padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-              decoration: BoxDecoration(
-                color: Colors.black.withOpacity(0.7),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Text(
-                '${_currentImageIndex + 1}/${imageUrls.length}',
-                style: TextStyle(color: Colors.white),
-              ),
-            ),
-          ),
-          Positioned(
-            bottom: 10,
-            left: 0,
-            right: 0,
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: imageUrls.asMap().entries.map((entry) {
-                return Container(
-                  width: 8.0,
-                  height: 8.0,
-                  margin: EdgeInsets.symmetric(horizontal: 4.0),
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: Colors.white.withOpacity(
-                      _currentImageIndex == entry.key ? 0.9 : 0.4,
-                    ),
-                  ),
-                );
-              }).toList(),
-            ),
-          ),
-        ],
-      );
-    }
+        ),
+      ],
+    );
   }
-Widget _buildActivityList(List<dynamic> activities) {
+}
+
+//part of activity list
+/* Widget _buildActivityList(List<dynamic> activities) {
   return Column(
     crossAxisAlignment: CrossAxisAlignment.start,
     children: activities.map((activity) {
@@ -709,14 +903,13 @@ Widget _buildActivityList(List<dynamic> activities) {
       );
     }).toList(),
   );
-}
+} */
 
 Widget _buildPostDetails(String title, String description, String postType) {
   final createdAt = widget.post['createdAt'] as Timestamp?;
   final data = widget.post.data() as Map<String, dynamic>;
   final activities = data['activities'] as List<dynamic>?;
 
-  // Create a map to track unique activities by name
   final uniqueActivities = <String, dynamic>{};
   activities?.forEach((activity) {
     if (!uniqueActivities.containsKey(activity['name'])) {
@@ -740,72 +933,31 @@ Widget _buildPostDetails(String title, String description, String postType) {
         ),
         SizedBox(height: 16),
         if (activities != null && activities.isNotEmpty) ...[
-          // Show only unique activities
-          ...uniqueActivities.values.map((activity) {
+          ...uniqueActivities.values.toList().asMap().entries.map((entry) {
+            final index = entry.key;
+            final activity = entry.value;
+            
             return Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text('📍 ', style: TextStyle(fontSize: 16)),
-                    Expanded(
-                      child: Text(
-                        '${activity['name']}: ${activity['description']}',
-                        style: TextStyle(fontSize: 16),
-                      ),
-                    ),
-                  ],
-                ),
-                SizedBox(height: 8),
-                Container(
-                  margin: EdgeInsets.only(bottom: 16),
-                  padding: EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: Colors.grey[300]!),
-                  ),
-                  child: Row(
+                RichText(
+                  text: TextSpan(
+                    style: TextStyle(fontSize: 16, color: Colors.black),
                     children: [
-                      Container(
-                        width: 24,
-                        height: 24,
-                        decoration: BoxDecoration(
-                          color: Colors.brown[400],
-                          borderRadius: BorderRadius.circular(4),
-                        ),
-                        child: Icon(
-                          Icons.location_on,
-                          color: Colors.white,
-                          size: 16,
+                      TextSpan(text: '${index + 1}. '),
+                      TextSpan(
+                        text: '${activity['name']}',
+                        style: TextStyle(
+                          color: Color(0xFF2E7D32),
+                          fontWeight: FontWeight.w500,
                         ),
                       ),
-                      SizedBox(width: 12),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              activity['name'] ?? '',
-                              style: TextStyle(
-                                fontWeight: FontWeight.w500,
-                              ),
-                            ),
-                            if (activity['placeDescription'] != null)
-                              Text(
-                                activity['placeDescription'],
-                                style: TextStyle(
-                                  color: Colors.grey[600],
-                                  fontSize: 14,
-                                ),
-                              ),
-                          ],
-                        ),
-                      ),
+                      if (activity['description'] != null)
+                        TextSpan(text: ': ${activity['description']}'),
                     ],
                   ),
                 ),
+                SizedBox(height: 8),
               ],
             );
           }).toList(),
@@ -1328,7 +1480,7 @@ Widget _buildActionBar() {
   }
 }
 
-// activity_card.dart
+/* // activity_card.dart
 class ActivityCard extends StatelessWidget {
   final Map<String, dynamic> activity;
   final String? placeId;
@@ -1412,7 +1564,7 @@ class ActivityCard extends StatelessWidget {
       ),
     );
   }
-}
+} */
 
 class Comment {
   final String id;

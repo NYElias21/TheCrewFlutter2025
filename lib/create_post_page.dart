@@ -379,6 +379,11 @@ Widget _buildDescriptionField() {
   }
 
 void _showAddActivityBottomSheet() {
+  bool isDescriptionMode = false;
+  AutocompletePrediction? selectedPrediction;
+  String? selectedAddress;
+  final descriptionController = TextEditingController();
+
   showModalBottomSheet(
     context: context,
     isScrollControlled: true,
@@ -396,13 +401,27 @@ void _showAddActivityBottomSheet() {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              // Drag Handle
+              Center(
+                child: Container(
+                  margin: EdgeInsets.only(top: 12),
+                  width: 40,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: Colors.grey[300],
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+              ),
+
+              // Header
               Padding(
                 padding: const EdgeInsets.all(16.0),
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     Text(
-                      'Add place',
+                      isDescriptionMode ? 'Add activity details' : 'Add place',
                       style: TextStyle(
                         fontSize: 20,
                         fontWeight: FontWeight.bold,
@@ -412,9 +431,6 @@ void _showAddActivityBottomSheet() {
                       icon: Icon(Icons.close),
                       onPressed: () {
                         _bottomSheetSearchController.clear();
-                        setSheetState(() {
-                          _predictions = [];
-                        });
                         Navigator.pop(context);
                       },
                     ),
@@ -422,87 +438,218 @@ void _showAddActivityBottomSheet() {
                 ),
               ),
               Divider(height: 1),
-              Padding(
-                padding: const EdgeInsets.all(16.0),
-                child: TextField(
-                  controller: _bottomSheetSearchController,
-                  decoration: InputDecoration(
-                    hintText: 'Search places',
-                    prefixIcon: Icon(Icons.search),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                      borderSide: BorderSide.none,
+
+              if (!isDescriptionMode) ...[
+                // Search Mode UI
+                Padding(
+                  padding: const EdgeInsets.all(16.0),
+                  child: TextField(
+                    controller: _bottomSheetSearchController,
+                    decoration: InputDecoration(
+                      hintText: 'Search places',
+                      prefixIcon: Icon(Icons.search),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: BorderSide.none,
+                      ),
+                      filled: true,
+                      fillColor: Colors.grey[100],
                     ),
-                    filled: true,
-                    fillColor: Colors.grey[100],
-                  ),
-                  onChanged: (value) async {
-                    if (value.isNotEmpty) {
-                      try {
-                        var result = await googlePlace.autocomplete.get(
-                          value,
-                          components: [Component("country", "us")],
-                        );
-                        
-                        if (result != null && result.predictions != null) {
+                    onChanged: (value) async {
+                      if (value.isNotEmpty) {
+                        try {
+                          var result = await googlePlace.autocomplete.get(
+                            value,
+                            components: [Component("country", "us")],
+                          );
+                          
+                          if (result != null && result.predictions != null) {
+                            setSheetState(() {
+                              _predictions = result.predictions!;
+                            });
+                          }
+                        } catch (e) {
+                          print("Error during places search: $e");
                           setSheetState(() {
-                            _predictions = result.predictions!;
+                            _predictions = [];
                           });
                         }
-                      } catch (e) {
-                        print("Error during places search: $e");
+                      } else {
                         setSheetState(() {
                           _predictions = [];
                         });
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(content: Text('Error fetching places: $e')),
-                        );
                       }
-                    } else {
-                      setSheetState(() {
-                        _predictions = [];
-                      });
-                    }
-                  },
+                    },
+                  ),
                 ),
-              ),
-              Expanded(
-                child: _predictions.isEmpty
-                    ? Center(
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Icon(Icons.location_on_outlined, size: 48, color: Colors.grey),
-                            SizedBox(height: 16),
-                            Text(
-                              'Search a location to add to your post',
-                              style: TextStyle(
-                                color: Colors.grey[600],
-                                fontSize: 16,
+                Expanded(
+                  child: _predictions.isEmpty
+                      ? Center(
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(Icons.location_on_outlined, size: 48, color: Colors.grey),
+                              SizedBox(height: 16),
+                              Text(
+                                'Search a location to add to your post',
+                                style: TextStyle(
+                                  color: Colors.grey[600],
+                                  fontSize: 16,
+                                ),
                               ),
-                            ),
-                          ],
+                            ],
+                          ),
+                        )
+                      : ListView.builder(
+                          controller: controller,
+                          itemCount: _predictions.length,
+                          itemBuilder: (context, index) {
+                            final prediction = _predictions[index];
+                            return ListTile(
+                              leading: Icon(Icons.location_on_outlined),
+                              title: Text(prediction.description ?? "Unknown"),
+                              onTap: () {
+                                setSheetState(() {
+                                  selectedPrediction = prediction;
+                                  selectedAddress = prediction.description;
+                                  isDescriptionMode = true;
+                                  _predictions = [];
+                                  _bottomSheetSearchController.clear();
+                                });
+                              },
+                            );
+                          },
                         ),
-                      )
-                    : ListView.builder(
-                        controller: controller,
-                        itemCount: _predictions.length,
-                        itemBuilder: (context, index) {
-                          final prediction = _predictions[index];
-                          return ListTile(
-                            leading: Icon(Icons.location_on_outlined),
-                            title: Text(prediction.description ?? "Unknown"),
-                            onTap: () {
-                              _showActivityDescriptionDialog(
-                                context,
-                                prediction.description ?? "",
-                                prediction,  // Now passing the prediction object
-                              );
-                            },
-                          );
-                        },
-                      ),
-              ),
+                ),
+              ] else ...[
+// Description Mode UI
+if (selectedAddress != null) ...[
+  SizedBox(height: 16),
+  Padding(
+    padding: const EdgeInsets.symmetric(horizontal: 16),
+    child: Container(
+      padding: EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.grey[100],
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Row(
+        children: [
+          Icon(Icons.place, color: Colors.grey[600]),
+          SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  _extractPlaceName(selectedAddress!),
+                  style: TextStyle(
+                    fontWeight: FontWeight.w600,
+                    fontSize: 16,
+                  ),
+                ),
+                Text(
+                  selectedAddress!.substring(_extractPlaceName(selectedAddress!).length + 2),
+                  style: TextStyle(
+                    color: Colors.grey[600],
+                    fontSize: 14,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    ),
+  ),
+  SizedBox(height: 16),
+  GestureDetector(
+    onTap: () {
+      FocusScope.of(context).unfocus();
+    },
+    child: Padding(
+      padding: EdgeInsets.fromLTRB(16, 0, 16, MediaQuery.of(context).viewInsets.bottom + 16),
+      child: TextField(
+        controller: descriptionController,
+        decoration: InputDecoration(
+          hintText: 'Write something about this place...',
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(12),
+            borderSide: BorderSide(color: Colors.grey[300]!),
+          ),
+          enabledBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(12),
+            borderSide: BorderSide(color: Colors.grey[300]!),
+          ),
+          focusedBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(12),
+            borderSide: BorderSide(color: Colors.black),
+          ),
+          filled: true,
+          fillColor: Colors.grey[50],
+          contentPadding: EdgeInsets.all(16),
+        ),
+        maxLines: null,
+        style: TextStyle(fontSize: 16),
+        textInputAction: TextInputAction.done,
+        onEditingComplete: () {
+          FocusScope.of(context).unfocus();
+        },
+      ),
+    ),
+  ),
+  Padding(
+    padding: const EdgeInsets.all(16),
+    child: ElevatedButton(
+      onPressed: () async {
+        if (selectedPrediction != null) {
+          var result = await googlePlace.details.get(selectedPrediction!.placeId ?? '');
+          Map<String, double>? location;
+          
+          if (result != null && result.result != null) {
+            final lat = result.result?.geometry?.location?.lat;
+            final lng = result.result?.geometry?.location?.lng;
+            if (lat != null && lng != null) {
+              location = {
+                'lat': lat,
+                'lng': lng
+              };
+            }
+          }
+
+          setState(() {
+            _activities.add(Activity(
+              name: _extractPlaceName(selectedAddress!),
+              description: descriptionController.text.trim(),
+              placeDescription: selectedAddress,
+              location: location,
+            ));
+            _updateDescription();
+          });
+          Navigator.pop(context);
+          
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Added ${_extractPlaceName(selectedAddress!)}'),
+              duration: Duration(seconds: 2),
+            ),
+          );
+        }
+      },
+      child: Text('Add Activity'),
+      style: ElevatedButton.styleFrom(
+        backgroundColor: Colors.black,
+        foregroundColor: Colors.white,
+        padding: EdgeInsets.symmetric(vertical: 16),
+        minimumSize: Size(double.infinity, 50),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(12),
+        ),
+      ),
+    ),
+  ),
+],
+              ],
             ],
           ),
         ),
@@ -518,11 +665,10 @@ String _extractPlaceName(String fullAddress) {
 }
 
 // Update the _showActivityDescriptionDialog method
-void _showActivityDescriptionDialog(BuildContext context, String fullAddress, AutocompletePrediction prediction) async {
+/* void _showActivityDescriptionDialog(BuildContext context, String fullAddress, AutocompletePrediction prediction) async {
   final descriptionController = TextEditingController();
   final placeName = _extractPlaceName(fullAddress);
   
-  // Get place details including coordinates
   var result = await googlePlace.details.get(prediction.placeId ?? '');
   Map<String, double>? location;
   
@@ -537,64 +683,174 @@ void _showActivityDescriptionDialog(BuildContext context, String fullAddress, Au
     }
   }
 
-  showDialog(
+  showModalBottomSheet(
     context: context,
-    builder: (context) => AlertDialog(
-      title: Text('Add description'),
-      content: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            placeName,
-            style: TextStyle(
-              fontWeight: FontWeight.bold,
-              fontSize: 16,
+    isScrollControlled: true,
+    backgroundColor: Colors.transparent,
+    builder: (context) => StatefulBuilder(
+      builder: (context, setState) {
+        final keyboardSpace = MediaQuery.of(context).viewInsets.bottom;
+        
+        return Container(
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+          ),
+          padding: EdgeInsets.only(bottom: keyboardSpace),
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Drag Handle
+                Center(
+                  child: Container(
+                    margin: EdgeInsets.only(top: 12),
+                    width: 40,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: Colors.grey[300],
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
+                ),
+                
+                // Header with place name
+                Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Expanded(
+                            child: Text(
+                              'Add activity details',
+                              style: TextStyle(
+                                fontSize: 20,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ),
+                          IconButton(
+                            icon: Icon(Icons.close),
+                            onPressed: () => Navigator.pop(context),
+                          ),
+                        ],
+                      ),
+                      SizedBox(height: 8),
+                      Container(
+                        padding: EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: Colors.grey[100],
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Row(
+                          children: [
+                            Icon(Icons.place, color: Colors.grey[600]),
+                            SizedBox(width: 12),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    placeName,
+                                    style: TextStyle(
+                                      fontWeight: FontWeight.w600,
+                                      fontSize: 16,
+                                    ),
+                                  ),
+                                  if (fullAddress != placeName)
+                                    Text(
+                                      fullAddress.substring(placeName.length + 2),
+                                      style: TextStyle(
+                                        color: Colors.grey[600],
+                                        fontSize: 14,
+                                      ),
+                                    ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+
+                // Description input
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  child: TextField(
+                    controller: descriptionController,
+                    decoration: InputDecoration(
+                      hintText: 'Write something about this place...',
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: BorderSide(color: Colors.grey[300]!),
+                      ),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: BorderSide(color: Colors.grey[300]!),
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: BorderSide(color: Colors.black),
+                      ),
+                      filled: true,
+                      fillColor: Colors.grey[50],
+                      contentPadding: EdgeInsets.all(16),
+                    ),
+                    maxLines: 4,
+                    style: TextStyle(fontSize: 16),
+                  ),
+                ),
+
+                // Add button
+                Container(
+                  width: double.infinity,
+                  padding: EdgeInsets.all(16),
+                  child: ElevatedButton(
+                    onPressed: () {
+                      setState(() {
+                        _activities.add(Activity(
+                          name: placeName,
+                          description: descriptionController.text.trim(),
+                          placeDescription: fullAddress,
+                          location: location,
+                        ));
+                        _updateDescription();
+                      });
+                      Navigator.pop(context);
+                      Navigator.pop(context);
+                      
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text('Added $placeName'),
+                          duration: Duration(seconds: 2),
+                        ),
+                      );
+                    },
+                    child: Text('Add Activity'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.black,
+                      foregroundColor: Colors.white,
+                      padding: EdgeInsets.symmetric(vertical: 16),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
             ),
           ),
-          SizedBox(height: 16),
-          TextField(
-            controller: descriptionController,
-            decoration: InputDecoration(
-              hintText: 'Write something about this place...',
-              border: OutlineInputBorder(),
-            ),
-            maxLines: 3,
-          ),
-        ],
-      ),
-      actions: [
-        TextButton(
-          child: Text('Cancel'),
-          onPressed: () => Navigator.pop(context),
-        ),
-        TextButton(
-          child: Text('Add'),
-          onPressed: () {
-            setState(() {
-              _activities.add(Activity(
-                name: placeName,
-                description: descriptionController.text.trim(),
-                placeDescription: fullAddress,
-                location: location,  // Add location data
-              ));
-              _updateDescription();
-            });
-            Navigator.pop(context);
-            Navigator.pop(context);
-            
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text('Added $placeName'),
-                duration: Duration(seconds: 2),
-              ),
-            );
-          },
-        ),
-      ],
+        );
+      },
     ),
   );
-}
+} */
 
 void _onSearchChanged() async {
   print("Searching for: ${_bottomSheetSearchController.text}");

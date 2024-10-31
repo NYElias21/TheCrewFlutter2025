@@ -98,20 +98,6 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
                         unselectedLabelColor: Colors.grey,
                       ),
                     ),
-                    actions: [
-                      IconButton(
-                        icon: Icon(Icons.camera_alt_outlined, color: Colors.black),
-                        onPressed: () {
-                          // TODO: Implement camera functionality
-                        },
-                      ),
-                      IconButton(
-                        icon: Icon(Icons.search, color: Colors.black),
-                        onPressed: () {
-                          // TODO: Implement search functionality
-                        },
-                      ),
-                    ],
                   )
                 ];
               },

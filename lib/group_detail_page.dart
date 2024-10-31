@@ -21,6 +21,7 @@ class GroupDetailPage extends StatefulWidget {
 class _GroupDetailPageState extends State<GroupDetailPage> with SingleTickerProviderStateMixin {
   final TextEditingController _nameController = TextEditingController();
   final TextEditingController _postController = TextEditingController();
+  final TextEditingController _messageController = TextEditingController();
   final ImagePicker _picker = ImagePicker();
   bool _isEditing = false;
   late TabController _tabController;
@@ -37,6 +38,7 @@ class _GroupDetailPageState extends State<GroupDetailPage> with SingleTickerProv
     _nameController.dispose();
     _postController.dispose();
     _tabController.dispose();
+    _messageController.dispose();
     super.dispose();
   }
 
@@ -520,10 +522,7 @@ Widget _buildListTileFromData(Map<String, dynamic> userData, String userId) {
 
 Widget _buildDetailsTab(Map<String, dynamic> groupData) {
   print("Group Data: $groupData"); // Debug print
-
-  // Get activities directly from groupData
   List<dynamic> activities = groupData['activities'] ?? [];
-  
   print("Activities from group: $activities"); // Debug print
 
   return ListView(
@@ -533,27 +532,132 @@ Widget _buildDetailsTab(Map<String, dynamic> groupData) {
       if (activities.isNotEmpty) 
         _buildOverviewMap(activities),
       
-      // List activities
-      Text('Group Activities', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-      SizedBox(height: 8),
+      // Activities Section Header
+      Padding(
+        padding: const EdgeInsets.symmetric(vertical: 16.0),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Text(
+              'Group Activities',
+              style: TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.bold,
+                letterSpacing: -0.5,
+              ),
+            ),
+            TextButton(
+              onPressed: _addActivity,
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.add, size: 20),
+                  SizedBox(width: 4),
+                  Text('Add'),
+                ],
+              ),
+              style: TextButton.styleFrom(
+                foregroundColor: Colors.blue,
+                padding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              ),
+            ),
+          ],
+        ),
+      ),
+
+      // Activities List
       if (activities.isEmpty)
-        Text('No activities added yet. Add some activities to get started!'),
+        Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(Icons.map_outlined, size: 48, color: Colors.grey[400]),
+              SizedBox(height: 16),
+              Text(
+                'No activities added yet',
+                style: TextStyle(
+                  color: Colors.grey[600],
+                  fontSize: 16,
+                ),
+              ),
+              Text(
+                'Add some activities to get started!',
+                style: TextStyle(
+                  color: Colors.grey[500],
+                  fontSize: 14,
+                ),
+              ),
+            ],
+          ),
+        ),
       ...activities.asMap().entries.map((entry) {
         int index = entry.key;
         Map<String, dynamic> activity = entry.value;
-        return ListTile(
-          title: Text(activity['name'] ?? 'Unnamed Activity'),
-          subtitle: Text(activity['description'] ?? 'No description'),
-          trailing: IconButton(
-            icon: Icon(Icons.edit),
-            onPressed: () => _editActivity(index, activity),
+        return Card(
+          elevation: 0,
+          margin: EdgeInsets.only(bottom: 12),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+            side: BorderSide(color: Colors.grey[200]!, width: 1),
+          ),
+          child: ListTile(
+            contentPadding: EdgeInsets.all(16),
+            title: Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    activity['name'] ?? 'Unnamed Activity',
+                    style: TextStyle(
+                      fontWeight: FontWeight.w600,
+                      fontSize: 16,
+                    ),
+                  ),
+                ),
+                IconButton(
+                  icon: Icon(Icons.edit_outlined, size: 20, color: Colors.grey[600]),
+                  constraints: BoxConstraints(minWidth: 40),
+                  padding: EdgeInsets.zero,
+                  onPressed: () => _editActivity(index, activity),
+                ),
+              ],
+            ),
+            subtitle: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                SizedBox(height: 8),
+                Text(
+                  activity['description'] ?? 'No description',
+                  style: TextStyle(
+                    color: Colors.grey[600],
+                    fontSize: 14,
+                    height: 1.4,
+                  ),
+                ),
+                if (activity['placeDescription'] != null) ...[
+                  SizedBox(height: 8),
+                  Row(
+                    children: [
+                      Icon(Icons.location_on_outlined, size: 16, color: Colors.grey[600]),
+                      SizedBox(width: 4),
+                      Expanded(
+                        child: Text(
+                          activity['placeDescription'],
+                          style: TextStyle(
+                            color: Colors.grey[600],
+                            fontSize: 12,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ],
+            ),
           ),
         );
       }).toList(),
-      ElevatedButton(
-        onPressed: _addActivity,
-        child: Text('Add Activity'),
-      ),
+      
+      SizedBox(height: 16), // Bottom padding
     ],
   );
 }
@@ -633,12 +737,7 @@ Widget _buildOverviewMap(List<dynamic> activities) {
               myLocationButtonEnabled: false,
             ),
           ),
-          SizedBox(height: 8),
-          Text(
-            'Activities',
-            style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-          ),
-          SizedBox(height: 16),
+          SizedBox(height: 16), // Keep some spacing between map and next element
         ],
       );
     },
@@ -948,10 +1047,185 @@ Widget _buildPostCard(Map<String, dynamic> postData, String postId) {
   );
 }
 
-  Widget _buildChatTab() {
-    // Placeholder for chat functionality
-    return Center(child: Text('Group Chat - To be implemented'));
+Widget _buildChatTab() {
+  return Column(
+    children: [
+      Expanded(
+        child: StreamBuilder<QuerySnapshot>(
+          stream: FirebaseFirestore.instance
+              .collection('group_chats')
+              .doc(widget.groupId)
+              .collection('messages')
+              .orderBy('timestamp', descending: true)
+              .snapshots(),
+          builder: (context, snapshot) {
+            if (snapshot.hasError) {
+              return Center(child: Text('Something went wrong'));
+            }
+
+            if (snapshot.connectionState == ConnectionState.waiting) {
+              return Center(child: CircularProgressIndicator());
+            }
+
+            if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+              return Center(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(Icons.chat_bubble_outline, 
+                      size: 48, 
+                      color: Colors.grey[400]
+                    ),
+                    SizedBox(height: 16),
+                    Text(
+                      'No messages yet',
+                      style: TextStyle(
+                        color: Colors.grey[600],
+                        fontSize: 16,
+                      ),
+                    ),
+                    Text(
+                      'Be the first to send a message!',
+                      style: TextStyle(
+                        color: Colors.grey[500],
+                        fontSize: 14,
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            }
+
+            return ListView.builder(
+              reverse: true,
+              padding: EdgeInsets.all(16),
+              itemCount: snapshot.data!.docs.length,
+              itemBuilder: (context, index) {
+                var message = snapshot.data!.docs[index].data() as Map<String, dynamic>;
+                bool isMine = message['senderId'] == FirebaseAuth.instance.currentUser?.uid;
+
+                return Padding(
+                  padding: EdgeInsets.only(bottom: 8),
+                  child: Row(
+                    mainAxisAlignment: isMine ? MainAxisAlignment.end : MainAxisAlignment.start,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      if (!isMine) ...[
+                        CircleAvatar(
+                          radius: 16,
+                          backgroundImage: message['senderPhoto'] != null 
+                            ? NetworkImage(message['senderPhoto'])
+                            : null,
+                          child: message['senderPhoto'] == null 
+                            ? Icon(Icons.person, size: 16)
+                            : null,
+                        ),
+                        SizedBox(width: 8),
+                      ],
+                      Flexible(
+                        child: Container(
+                          padding: EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: isMine ? Colors.blue : Colors.grey[200],
+                            borderRadius: BorderRadius.circular(16),
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              if (!isMine)
+                                Padding(
+                                  padding: const EdgeInsets.only(bottom: 4),
+                                  child: Text(
+                                    message['senderName'] ?? 'Unknown',
+                                    style: TextStyle(
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 12,
+                                      color: Colors.grey[700],
+                                    ),
+                                  ),
+                                ),
+                              Text(
+                                message['text'] ?? '',
+                                style: TextStyle(
+                                  color: isMine ? Colors.white : Colors.black,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                      if (isMine) SizedBox(width: 24),
+                    ],
+                  ),
+                );
+              },
+            );
+          },
+        ),
+      ),
+Container(
+  padding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+  decoration: BoxDecoration(
+    color: Colors.white,
+    border: Border(top: BorderSide(color: Colors.grey[200]!)),
+  ),
+  child: TextField(
+    controller: _messageController,
+    decoration: InputDecoration(
+      hintText: 'Type a message...',
+      border: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(24),
+        borderSide: BorderSide.none,
+      ),
+      filled: true,
+      fillColor: Colors.grey[100],
+      contentPadding: EdgeInsets.symmetric(
+        horizontal: 16,
+        vertical: 12,
+      ),
+      suffixIcon: IconButton(
+        icon: Icon(Icons.send, 
+          color: Colors.blue,
+          size: 20,
+        ),
+        onPressed: _sendMessage,
+      ),
+    ),
+    maxLines: null,
+    textCapitalization: TextCapitalization.sentences,
+  ),
+),
+    ],
+  );
+}
+
+void _sendMessage() async {
+  if (_messageController.text.trim().isEmpty) return;
+
+  final user = FirebaseAuth.instance.currentUser;
+  if (user == null) return;
+
+  try {
+    await FirebaseFirestore.instance
+        .collection('group_chats')
+        .doc(widget.groupId)
+        .collection('messages')
+        .add({
+      'text': _messageController.text.trim(),
+      'timestamp': FieldValue.serverTimestamp(),
+      'senderId': user.uid,
+      'senderName': user.displayName ?? 'Anonymous',
+      'senderPhoto': user.photoURL,
+    });
+
+    _messageController.clear();
+  } catch (e) {
+    print('Error sending message: $e');
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('Failed to send message')),
+    );
   }
+}
 
 void _showInviteDialog(BuildContext context) {
   Set<String> selectedFriends = {};

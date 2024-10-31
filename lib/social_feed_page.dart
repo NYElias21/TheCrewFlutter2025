@@ -347,150 +347,201 @@ class SocialPostCard extends StatelessWidget {
     );
   }
 
-Widget _buildGroupMembersSection(BuildContext context, List<String> groupMembers) {
-  return SizedBox(
-    height: 40, // Increased from 32 to 40
-    child: Stack(
-      alignment: Alignment.centerLeft, // Align items to the left vertically centered
-      children: [
-        for (var i = 0; i < groupMembers.length; i++)
-          if (i < 4)
-            Positioned(
-              left: i * 24.0, // Increased from 20 to 24 for more spacing
-              child: FutureBuilder<DocumentSnapshot>(
-                future: FirebaseFirestore.instance.collection('users').doc(groupMembers[i]).get(),
-                builder: (context, snapshot) {
-                  if (snapshot.connectionState == ConnectionState.waiting) {
-                    return CircleAvatar(
-                      backgroundColor: Colors.grey[300],
-                      radius: 18, // Increased from 16 to 18
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    );
-                  }
-                  if (snapshot.hasError || !snapshot.hasData) {
-                    return CircleAvatar(
-                      backgroundColor: Colors.grey[300],
-                      radius: 18, // Increased from 16 to 18
-                      child: Icon(Icons.error, size: 18),
-                    );
-                  }
-                  var userData = snapshot.data!.data() as Map<String, dynamic>?;
-                  String userPhotoUrl = userData?['photoURL'] ?? '';
-                  return Container(
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      border: Border.all(color: Colors.white, width: 2),
+Widget _buildGroupMembersSection(BuildContext context, List<String> postGroupMembers) {
+  String groupId = (post.data() as Map<String, dynamic>)['groupId'] ?? post.id;
+
+  return FutureBuilder<DocumentSnapshot>(
+    future: FirebaseFirestore.instance.collection('groups').doc(groupId).get(),
+    builder: (context, groupSnapshot) {
+      if (groupSnapshot.connectionState == ConnectionState.waiting) {
+        return SizedBox(
+          height: 40,
+          child: Center(child: CircularProgressIndicator()),
+        );
+      }
+
+      // Combine members from both group and post
+      Set<String> allMembers = {};
+      
+      // Add members from post
+      allMembers.addAll(postGroupMembers);
+      
+      // Add members from group
+      if (groupSnapshot.hasData && groupSnapshot.data != null) {
+        List<String> groupMembers = List<String>.from(groupSnapshot.data!['members'] ?? []);
+        allMembers.addAll(groupMembers);
+      }
+
+      List<String> uniqueMembers = allMembers.toList();
+
+      return SizedBox(
+        height: 40,
+        child: Stack(
+          alignment: Alignment.centerLeft,
+          children: [
+            for (var i = 0; i < uniqueMembers.length; i++)
+              if (i < 4)
+                Positioned(
+                  left: i * 24.0,
+                  child: FutureBuilder<DocumentSnapshot>(
+                    future: FirebaseFirestore.instance.collection('users').doc(uniqueMembers[i]).get(),
+                    builder: (context, snapshot) {
+                      if (snapshot.connectionState == ConnectionState.waiting) {
+                        return CircleAvatar(
+                          backgroundColor: Colors.grey[300],
+                          radius: 18,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        );
+                      }
+                      if (snapshot.hasError || !snapshot.hasData) {
+                        return CircleAvatar(
+                          backgroundColor: Colors.grey[300],
+                          radius: 18,
+                          child: Icon(Icons.error, size: 18),
+                        );
+                      }
+                      var userData = snapshot.data!.data() as Map<String, dynamic>?;
+                      String userPhotoUrl = userData?['photoURL'] ?? '';
+                      return Container(
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          border: Border.all(color: Colors.white, width: 2),
+                        ),
+                        child: CircleAvatar(
+                          backgroundImage: userPhotoUrl.isNotEmpty ? NetworkImage(userPhotoUrl) : null,
+                          radius: 18,
+                          child: userPhotoUrl.isEmpty ? Icon(Icons.person, size: 18) : null,
+                        ),
+                      );
+                    },
+                  ),
+                ),
+            if (uniqueMembers.length > 4)
+              Positioned(
+                left: 4 * 24.0,
+                child: Container(
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    border: Border.all(color: Colors.white, width: 2),
+                    color: Colors.grey[300],
+                  ),
+                  child: CircleAvatar(
+                    backgroundColor: Colors.transparent,
+                    radius: 18,
+                    child: Text(
+                      '+${uniqueMembers.length - 4}',
+                      style: TextStyle(fontSize: 12, color: Colors.black, fontWeight: FontWeight.bold),
                     ),
-                    child: CircleAvatar(
-                      backgroundImage: userPhotoUrl.isNotEmpty ? NetworkImage(userPhotoUrl) : null,
-                      radius: 18, // Increased from 16 to 18
-                      child: userPhotoUrl.isEmpty ? Icon(Icons.person, size: 18) : null,
-                    ),
-                  );
-                },
-              ),
-            ),
-        if (groupMembers.length > 4)
-          Positioned(
-            left: 4 * 24.0, // Adjusted to match new spacing
-            child: Container(
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                border: Border.all(color: Colors.white, width: 2),
-                color: Colors.grey[300],
-              ),
-              child: CircleAvatar(
-                backgroundColor: Colors.transparent,
-                radius: 18, // Increased from 16 to 18
-                child: Text(
-                  '+${groupMembers.length - 4}',
-                  style: TextStyle(fontSize: 12, color: Colors.black, fontWeight: FontWeight.bold),
+                  ),
                 ),
               ),
-            ),
-          ),
-      ],
-    ),
+          ],
+        ),
+      );
+    },
   );
 }
 
-Widget _buildActionButton(BuildContext context, bool isGroupActivity, List<String> groupMembers, String postCreatorId) {
-  bool hasJoined = groupMembers.contains(currentUserId);
-  bool isCreator = currentUserId == postCreatorId;
-  bool showViewGroupButton = isCreator || (isGroupActivity && hasJoined);
+Future<bool> _checkGroupMembership(String groupId) async {
+  try {
+    // Check membership in both group and social post
+    DocumentSnapshot groupDoc = await FirebaseFirestore.instance
+        .collection('groups')
+        .doc(groupId)
+        .get();
+    
+    if (!groupDoc.exists) return false;
 
-  if (showViewGroupButton) {
-    return ElevatedButton(
-      onPressed: () {
-        String groupId = (post.data() as Map<String, dynamic>)['groupId'] ?? post.id;
-        Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (context) => GroupDetailPage(groupId: groupId),
+    List<String> groupMembers = List<String>.from(groupDoc['members'] ?? []);
+    List<String> postMembers = List<String>.from((post.data() as Map<String, dynamic>)['groupMembers'] ?? []);
+
+    return groupMembers.contains(currentUserId) || postMembers.contains(currentUserId);
+  } catch (e) {
+    print('Error checking group membership: $e');
+    return false;
+  }
+}
+
+Future<void> _joinGroup(BuildContext context, String groupId) async {
+  try {
+    await FirebaseFirestore.instance.runTransaction((transaction) async {
+      DocumentReference groupRef = FirebaseFirestore.instance.collection('groups').doc(groupId);
+      DocumentReference postRef = post.reference;
+      
+      DocumentSnapshot groupSnap = await transaction.get(groupRef);
+      DocumentSnapshot postSnap = await transaction.get(postRef);
+      
+      List<String> groupMembers = List<String>.from(groupSnap['members'] ?? []);
+      List<String> postMembers = List<String>.from(postSnap['groupMembers'] ?? []);
+      
+      if (!groupMembers.contains(currentUserId)) {
+        groupMembers.add(currentUserId);
+        transaction.update(groupRef, {'members': groupMembers});
+      }
+      
+      if (!postMembers.contains(currentUserId)) {
+        postMembers.add(currentUserId);
+        transaction.update(postRef, {'groupMembers': postMembers});
+      }
+    });
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('Successfully joined the group!')),
+    );
+  } catch (e) {
+    print('Error joining group: $e');
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('Failed to join the group. Please try again.')),
+    );
+  }
+}
+
+Widget _buildActionButton(BuildContext context, bool isGroupActivity, List<String> groupMembers, String postCreatorId) {
+  bool isCreator = currentUserId == postCreatorId;
+  String groupId = (post.data() as Map<String, dynamic>)['groupId'] ?? post.id;
+
+  return FutureBuilder<bool>(
+    future: _checkGroupMembership(groupId),
+    builder: (context, snapshot) {
+      if (snapshot.connectionState == ConnectionState.waiting) {
+        return CircularProgressIndicator();
+      }
+
+      bool isMember = snapshot.data ?? false;
+      bool showViewGroupButton = isCreator || (isGroupActivity && isMember);
+
+      if (showViewGroupButton) {
+        return ElevatedButton(
+          onPressed: () => Navigator.push(
+            context,
+            MaterialPageRoute(builder: (context) => GroupDetailPage(groupId: groupId)),
+          ),
+          child: Text('View Group'),
+          style: ElevatedButton.styleFrom(
+            backgroundColor: Colors.black,
+            foregroundColor: Colors.white,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(20),
+            ),
           ),
         );
-      },
-      child: Text('View Group'),
-      style: ElevatedButton.styleFrom(
-        backgroundColor: Colors.black,
-        foregroundColor: Colors.white,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(20),
-        ),
-      ),
-    );
-  } else if (isGroupActivity) {
-    return ElevatedButton(
-      onPressed: () async {
-        if (!groupMembers.contains(currentUserId)) {
-          String groupId = (post.data() as Map<String, dynamic>)['groupId'] ?? post.id;
-          
-          try {
-            await FirebaseFirestore.instance.runTransaction((transaction) async {
-              // Perform all reads first
-              DocumentSnapshot groupSnapshot = await transaction.get(FirebaseFirestore.instance.collection('groups').doc(groupId));
-              DocumentSnapshot postSnapshot = await transaction.get(post.reference);
-
-              // Now perform the updates
-              List<String> members = List<String>.from(groupSnapshot['members'] ?? []);
-              List<String> postGroupMembers = List<String>.from(postSnapshot['groupMembers'] ?? []);
-
-              if (!members.contains(currentUserId)) {
-                members.add(currentUserId);
-                transaction.update(groupSnapshot.reference, {'members': members});
-              }
-
-              if (!postGroupMembers.contains(currentUserId)) {
-                postGroupMembers.add(currentUserId);
-                transaction.update(postSnapshot.reference, {'groupMembers': postGroupMembers});
-              }
-            });
-            
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text('Successfully joined the group!')),
-            );
-            
-            (context as Element).reassemble(); // Force refresh
-          } catch (e) {
-            print('Error joining group: $e');
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text('Failed to join the group. Please try again.')),
-            );
-          }
-        }
-      },
-      child: Text('Join'),
-      style: ElevatedButton.styleFrom(
-        backgroundColor: Colors.black,
-        foregroundColor: Colors.white,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(20),
-        ),
-      ),
-    );
-  } else {
-    return SizedBox.shrink(); // No button for non-group activities
-  }
+      } else if (isGroupActivity) {
+        return ElevatedButton(
+          onPressed: () => _joinGroup(context, groupId),
+          child: Text('Join'),
+          style: ElevatedButton.styleFrom(
+            backgroundColor: Colors.black,
+            foregroundColor: Colors.white,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(20),
+            ),
+          ),
+        );
+      }
+      
+      return SizedBox.shrink();
+    },
+  );
 }
 
   Widget _buildReactionsSection(BuildContext context, Map<String, int> reactions) {
