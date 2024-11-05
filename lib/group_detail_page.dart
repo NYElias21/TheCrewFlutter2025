@@ -8,6 +8,8 @@ import 'package:intl/intl.dart';
 import 'profile_page.dart';  
 import 'dart:io';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
+import 'package:google_place/google_place.dart';
+import 'poll_components.dart';
 
 class GroupDetailPage extends StatefulWidget {
   final String groupId;
@@ -18,10 +20,12 @@ class GroupDetailPage extends StatefulWidget {
   _GroupDetailPageState createState() => _GroupDetailPageState();
 }
 
+
 class _GroupDetailPageState extends State<GroupDetailPage> with SingleTickerProviderStateMixin {
   final TextEditingController _nameController = TextEditingController();
   final TextEditingController _postController = TextEditingController();
   final TextEditingController _messageController = TextEditingController();
+  final TextEditingController commentController = TextEditingController();
   final ImagePicker _picker = ImagePicker();
   bool _isEditing = false;
   late TabController _tabController;
@@ -39,6 +43,7 @@ class _GroupDetailPageState extends State<GroupDetailPage> with SingleTickerProv
     _postController.dispose();
     _tabController.dispose();
     _messageController.dispose();
+    commentController.dispose();
     super.dispose();
   }
 
@@ -539,7 +544,7 @@ Widget _buildDetailsTab(Map<String, dynamic> groupData) {
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
             Text(
-              'Group Activities',
+              'Activities',
               style: TextStyle(
                 fontSize: 20,
                 fontWeight: FontWeight.bold,
@@ -861,9 +866,15 @@ Widget _buildPostInput() {
     child: Row(
       children: [
         CircleAvatar(
-          backgroundImage: NetworkImage(FirebaseAuth.instance.currentUser?.photoURL ?? ''),
-          child: FirebaseAuth.instance.currentUser?.photoURL == null
-              ? Icon(Icons.person)
+          radius: 20,
+          backgroundColor: Colors.grey[300],
+          backgroundImage: FirebaseAuth.instance.currentUser?.photoURL != null && 
+                         FirebaseAuth.instance.currentUser!.photoURL!.isNotEmpty 
+              ? NetworkImage(FirebaseAuth.instance.currentUser!.photoURL!)
+              : null,
+          child: (FirebaseAuth.instance.currentUser?.photoURL == null || 
+                 FirebaseAuth.instance.currentUser!.photoURL!.isEmpty)
+              ? Icon(Icons.person, size: 24, color: Colors.grey[600])
               : null,
         ),
         SizedBox(width: 12),
@@ -885,6 +896,7 @@ Widget _buildPostInput() {
     ),
   );
 }
+
 Widget _buildPostsList() {
   return StreamBuilder<QuerySnapshot>(
     stream: FirebaseFirestore.instance
@@ -906,6 +918,7 @@ Widget _buildPostsList() {
       }
 
       return ListView.builder(
+        padding: EdgeInsets.zero,
         itemCount: snapshot.data!.docs.length,
         itemBuilder: (context, index) {
           DocumentSnapshot document = snapshot.data!.docs[index];
@@ -1039,6 +1052,274 @@ Widget _buildPostCard(Map<String, dynamic> postData, String postId) {
                   },
                 ),
               ),
+            // Comments Section
+/*             SizedBox(height: 16),
+            Row(
+              children: [
+                Icon(Icons.chat_bubble_outline, size: 20, color: Colors.grey[600]),
+                SizedBox(width: 8),
+                Text(
+                  'Comments',
+                  style: TextStyle(
+                    color: Colors.grey[600],
+                    fontSize: 14,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ],
+            ), */
+            // Comments Stream
+             SizedBox(height: 16),
+StreamBuilder<QuerySnapshot>(
+  stream: FirebaseFirestore.instance
+      .collection('group_posts')
+      .doc(postId)
+      .collection('comments')
+      .orderBy('timestamp', descending: false)
+      .snapshots(),
+  builder: (context, snapshot) {
+    if (snapshot.hasError) {
+      return Text('Error loading comments');
+    }
+
+    if (snapshot.connectionState == ConnectionState.waiting) {
+      return SizedBox(
+        height: 40,
+        child: Center(child: CircularProgressIndicator()),
+      );
+    }
+
+    List<DocumentSnapshot> comments = snapshot.data?.docs ?? [];
+    int commentCount = comments.length;
+
+    return InkWell(
+      onTap: () {
+        // Show bottom sheet with full comments
+        showModalBottomSheet(
+          context: context,
+          isScrollControlled: true,
+          backgroundColor: Colors.transparent,
+          builder: (context) => DraggableScrollableSheet(
+            initialChildSize: 0.9,
+            minChildSize: 0.5,
+            maxChildSize: 0.9,
+            builder: (_, controller) => Container(
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+              ),
+              child: Column(
+                children: [
+                  // Header
+                  Container(
+                    padding: EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      border: Border(
+                        bottom: BorderSide(color: Colors.grey[200]!),
+                      ),
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(
+                          'Comments',
+                          style: TextStyle(
+                            fontSize: 20,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        IconButton(
+                          icon: Icon(Icons.close),
+                          onPressed: () => Navigator.pop(context),
+                        ),
+                      ],
+                    ),
+                  ),
+                  // Comments list
+                  Expanded(
+                    child: ListView.builder(
+                      controller: controller,
+                      padding: EdgeInsets.all(16),
+                      itemCount: comments.length,
+                      itemBuilder: (context, index) {
+                        Map<String, dynamic> commentData = comments[index].data() as Map<String, dynamic>;
+                        return Padding(
+                          padding: EdgeInsets.only(bottom: 16),
+                          child: Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              CircleAvatar(
+                                radius: 16,
+                                backgroundImage: commentData['authorPhoto'] != null 
+                                  ? NetworkImage(commentData['authorPhoto'])
+                                  : null,
+                                child: commentData['authorPhoto'] == null 
+                                  ? Icon(Icons.person, size: 16)
+                                  : null,
+                              ),
+                              SizedBox(width: 8),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Row(
+                                      children: [
+                                        Text(
+                                          commentData['authorName'] ?? 'Anonymous',
+                                          style: TextStyle(
+                                            fontWeight: FontWeight.bold,
+                                            fontSize: 13,
+                                          ),
+                                        ),
+                                        SizedBox(width: 8),
+                                        Text(
+                                          _formatTimestamp(commentData['timestamp'] as Timestamp),
+                                          style: TextStyle(
+                                            color: Colors.grey[500],
+                                            fontSize: 12,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                    SizedBox(height: 4),
+                                    Text(
+                                      commentData['text'] ?? '',
+                                      style: TextStyle(fontSize: 14),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              if (commentData['authorId'] == FirebaseAuth.instance.currentUser?.uid)
+                                IconButton(
+                                  icon: Icon(Icons.more_vert, size: 20),
+                                  padding: EdgeInsets.zero,
+                                  constraints: BoxConstraints(),
+                                  onPressed: () {
+                                    showModalBottomSheet(
+                                      context: context,
+                                      builder: (context) => Column(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          ListTile(
+                                            leading: Icon(Icons.delete_outline, color: Colors.red),
+                                            title: Text('Delete comment'),
+                                            onTap: () async {
+                                              await FirebaseFirestore.instance
+                                                  .collection('group_posts')
+                                                  .doc(postId)
+                                                  .collection('comments')
+                                                  .doc(comments[index].id)
+                                                  .delete();
+                                              Navigator.pop(context);
+                                            },
+                                          ),
+                                        ],
+                                      ),
+                                    );
+                                  },
+                                ),
+                            ],
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                  // Comment input
+Container(
+  padding: EdgeInsets.all(16),
+  decoration: BoxDecoration(
+    border: Border(
+      top: BorderSide(color: Colors.grey[200]!),
+    ),
+  ),
+  child: Row(
+    children: [
+      CircleAvatar(
+        radius: 16,
+        backgroundColor: Colors.grey[300],
+        backgroundImage: FirebaseAuth.instance.currentUser?.photoURL != null && 
+                       FirebaseAuth.instance.currentUser!.photoURL!.isNotEmpty 
+            ? NetworkImage(FirebaseAuth.instance.currentUser!.photoURL!)
+            : null,
+        child: (FirebaseAuth.instance.currentUser?.photoURL == null || 
+               FirebaseAuth.instance.currentUser!.photoURL!.isEmpty)
+            ? Icon(Icons.person, size: 16, color: Colors.grey[600])
+            : null,
+      ),
+      SizedBox(width: 12),
+      Expanded(
+        child: TextField(
+          controller: commentController,
+          decoration: InputDecoration(
+            hintText: 'Write a comment...',
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(20),
+              borderSide: BorderSide.none,
+            ),
+            filled: true,
+            fillColor: Colors.grey[100],
+            contentPadding: EdgeInsets.symmetric(
+              horizontal: 16,
+              vertical: 12,
+            ),
+          ),
+          maxLines: null,
+        ),
+      ),
+      SizedBox(width: 12),
+      TextButton(
+        onPressed: () async {
+          if (commentController.text.trim().isNotEmpty) {
+            final user = FirebaseAuth.instance.currentUser;
+            await FirebaseFirestore.instance
+                .collection('group_posts')
+                .doc(postId)
+                .collection('comments')
+                .add({
+              'text': commentController.text.trim(),
+              'authorId': user?.uid,
+              'authorName': user?.displayName ?? 'Anonymous',
+              'authorPhoto': user?.photoURL,
+              'timestamp': FieldValue.serverTimestamp(),
+            });
+            commentController.clear();
+          }
+        },
+        child: Text('Post'),
+        style: TextButton.styleFrom(
+          foregroundColor: Colors.blue,
+          padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        ),
+      ),
+    ],
+  ),
+)
+                ],
+              ),
+            ),
+          ),
+        );
+      },
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.end,
+        children: [
+          Icon(Icons.chat_bubble_outline, 
+            size: 20, 
+            color: Colors.grey[600]
+          ),
+          SizedBox(width: 4),
+          Text(
+            commentCount.toString(),
+            style: TextStyle(
+              color: Colors.grey[600],
+              fontSize: 14,
+            ),
+          ),
+        ],
+      ),
+    );
+  },
+)
           ],
         ),
       ),
@@ -1046,6 +1327,95 @@ Widget _buildPostCard(Map<String, dynamic> postData, String postId) {
     ],
   );
 }
+
+/* void _showCommentDialog(BuildContext context, String postId) {
+  final TextEditingController commentController = TextEditingController();
+
+  showModalBottomSheet(
+    context: context,
+    isScrollControlled: true,
+    backgroundColor: Colors.transparent,
+    builder: (context) => Container(
+      padding: EdgeInsets.only(
+        bottom: MediaQuery.of(context).viewInsets.bottom,
+      ),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            padding: EdgeInsets.all(16),
+            child: Row(
+              children: [
+                CircleAvatar(
+                  radius: 16,
+                  backgroundColor: Colors.grey[300],
+                  backgroundImage: FirebaseAuth.instance.currentUser?.photoURL != null && 
+                                 FirebaseAuth.instance.currentUser!.photoURL!.isNotEmpty 
+                      ? NetworkImage(FirebaseAuth.instance.currentUser!.photoURL!)
+                      : null,
+                  child: (FirebaseAuth.instance.currentUser?.photoURL == null || 
+                         FirebaseAuth.instance.currentUser!.photoURL!.isEmpty)
+                      ? Icon(Icons.person, size: 16, color: Colors.grey[600])
+                      : null,
+                ),
+                SizedBox(width: 12),
+                Expanded(
+                  child: TextField(
+                    controller: commentController,
+                    autofocus: true,
+                    decoration: InputDecoration(
+                      hintText: 'Write a comment...',
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(20),
+                        borderSide: BorderSide.none,
+                      ),
+                      filled: true,
+                      fillColor: Colors.grey[100],
+                      contentPadding: EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 12,
+                      ),
+                    ),
+                    maxLines: null,
+                  ),
+                ),
+                SizedBox(width: 12),
+                TextButton(
+                  onPressed: () async {
+                    if (commentController.text.trim().isNotEmpty) {
+                      final user = FirebaseAuth.instance.currentUser;
+                      await FirebaseFirestore.instance
+                          .collection('group_posts')
+                          .doc(postId)
+                          .collection('comments')
+                          .add({
+                        'text': commentController.text.trim(),
+                        'authorId': user?.uid,
+                        'authorName': user?.displayName ?? 'Anonymous',
+                        'authorPhoto': user?.photoURL,
+                        'timestamp': FieldValue.serverTimestamp(),
+                      });
+                      Navigator.pop(context);
+                    }
+                  },
+                  child: Text('Post'),
+                  style: TextButton.styleFrom(
+                    foregroundColor: Colors.blue,
+                    padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    ),
+  );
+} */
 
 Widget _buildChatTab() {
   return Column(
@@ -1097,13 +1467,27 @@ Widget _buildChatTab() {
             }
 
             return ListView.builder(
-              reverse: true,
+              //reverse: true,
               padding: EdgeInsets.all(16),
               itemCount: snapshot.data!.docs.length,
               itemBuilder: (context, index) {
-                var message = snapshot.data!.docs[index].data() as Map<String, dynamic>;
-                bool isMine = message['senderId'] == FirebaseAuth.instance.currentUser?.uid;
+                var document = snapshot.data!.docs[snapshot.data!.docs.length - 1 - index];  // Reverse the index
+                var message = document.data() as Map<String, dynamic>;
+                
+                // Handle poll messages
+                if (message['type'] == 'poll') {
+                  return Padding(
+                    padding: EdgeInsets.symmetric(vertical: 8),
+                    child: PollMessage(
+                      message: message,
+                      groupId: widget.groupId,
+                      messageId: document.id,
+                    ),
+                  );
+                }
 
+                // Handle regular text messages
+                bool isMine = message['senderId'] == FirebaseAuth.instance.currentUser?.uid;
                 return Padding(
                   padding: EdgeInsets.only(bottom: 8),
                   child: Row(
@@ -1169,33 +1553,261 @@ Container(
     color: Colors.white,
     border: Border(top: BorderSide(color: Colors.grey[200]!)),
   ),
-  child: TextField(
-    controller: _messageController,
-    decoration: InputDecoration(
-      hintText: 'Type a message...',
-      border: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(24),
-        borderSide: BorderSide.none,
+  child: Row(
+    children: [
+      // Single poll menu button
+      IconButton(
+        icon: Icon(Icons.poll_outlined),
+        onPressed: () {
+          showModalBottomSheet(
+            context: context,
+            builder: (context) => Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                ListTile(
+                  leading: Icon(Icons.add_chart),
+                  title: Text('Create Poll'),
+                  onTap: () {
+                    Navigator.pop(context);
+                    _showCreatePoll();
+                  },
+                ),
+                ListTile(
+                  leading: Icon(Icons.history),
+                  title: Text('View Polls'),
+                  onTap: () {
+                    Navigator.pop(context);
+                    _showPollsHistory();
+                  },
+                ),
+              ],
+            ),
+          );
+        },
+        color: Colors.grey[600],
       ),
-      filled: true,
-      fillColor: Colors.grey[100],
-      contentPadding: EdgeInsets.symmetric(
-        horizontal: 16,
-        vertical: 12,
-      ),
-      suffixIcon: IconButton(
-        icon: Icon(Icons.send, 
-          color: Colors.blue,
-          size: 20,
+      // Message input
+      Expanded(
+        child: TextField(
+          controller: _messageController,
+          decoration: InputDecoration(
+            hintText: 'Type a message...',
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(24),
+              borderSide: BorderSide.none,
+            ),
+            filled: true,
+            fillColor: Colors.grey[100],
+            contentPadding: EdgeInsets.symmetric(
+              horizontal: 16,
+              vertical: 12,
+            ),
+          ),
+          maxLines: null,
+          textCapitalization: TextCapitalization.sentences,
         ),
+      ),
+      // Send button
+      IconButton(
+        icon: Icon(Icons.send, color: Colors.blue),
         onPressed: _sendMessage,
       ),
-    ),
-    maxLines: null,
-    textCapitalization: TextCapitalization.sentences,
-  ),
-),
     ],
+  ),
+)
+    ],
+  );
+}
+
+void _showCreatePoll() {
+  showModalBottomSheet(
+    context: context,
+    isScrollControlled: true,
+    backgroundColor: Colors.transparent,
+    builder: (context) => CreatePollBottomSheet(
+      onPollCreated: (question, options) async {
+        final user = FirebaseAuth.instance.currentUser;
+        if (user == null) return;
+
+        try {
+          await FirebaseFirestore.instance
+              .collection('group_chats')
+              .doc(widget.groupId)
+              .collection('messages')
+              .add({
+            'type': 'poll',  // Make sure this is set correctly
+            'pollQuestion': question,
+            'pollOptions': options,
+            'votes': {},
+            'timestamp': FieldValue.serverTimestamp(),
+            'senderId': user.uid,
+            'senderName': user.displayName ?? 'Anonymous',
+            'senderPhoto': user.photoURL,
+          });
+          print('Poll created successfully'); // Debug message
+        } catch (e) {
+          print('Error creating poll: $e'); // Debug message
+        }
+      },
+    ),
+  );
+}
+
+void _showPollsHistory() {
+  showModalBottomSheet(
+    context: context,
+    isScrollControlled: true,
+    backgroundColor: Colors.transparent,
+    builder: (context) => DraggableScrollableSheet(
+      initialChildSize: 0.9,
+      minChildSize: 0.5,
+      maxChildSize: 0.9,
+      builder: (_, controller) => Container(
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+        ),
+        child: Column(
+          children: [
+            // Header
+            Container(
+              padding: EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                border: Border(
+                  bottom: BorderSide(color: Colors.grey[200]!),
+                ),
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    'Polls',
+                    style: TextStyle(
+                      fontSize: 20,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  IconButton(
+                    icon: Icon(Icons.close),
+                    onPressed: () => Navigator.pop(context),
+                  ),
+                ],
+              ),
+            ),
+            // Polls List
+            Expanded(
+              child: StreamBuilder<QuerySnapshot>(
+                stream: FirebaseFirestore.instance
+                    .collection('group_chats')
+                    .doc(widget.groupId)
+                    .collection('messages')
+                    .where('type', isEqualTo: 'poll')
+                    .orderBy('timestamp', descending: true)
+                    .snapshots(),
+                builder: (context, snapshot) {
+                  print('Stream status: ${snapshot.connectionState}');
+                  print('Has data: ${snapshot.hasData}');
+                  if (snapshot.hasData) {
+                    print('Number of docs: ${snapshot.data!.docs.length}');
+                  }
+                  
+                  if (snapshot.connectionState == ConnectionState.waiting) {
+                    return Center(child: CircularProgressIndicator());
+                  }
+
+                  if (snapshot.hasError) {
+                    print('Error loading polls: ${snapshot.error}');
+                    return Center(child: Text('Error loading polls'));
+                  }
+
+                  final polls = snapshot.data?.docs ?? [];
+                  
+                  if (polls.isEmpty) {
+                    return Center(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(
+                            Icons.poll_outlined, 
+                            size: 64, 
+                            color: Colors.grey[300]
+                          ),
+                          SizedBox(height: 16),
+                          Text(
+                            'No polls yet',
+                            style: TextStyle(
+                              fontSize: 18,
+                              color: Colors.grey[600],
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                          SizedBox(height: 8),
+                          Text(
+                            'Create a poll to get started',
+                            style: TextStyle(
+                              fontSize: 14,
+                              color: Colors.grey[500],
+                            ),
+                          ),
+                          SizedBox(height: 24),
+                          TextButton.icon(
+                            onPressed: () {
+                              Navigator.pop(context);
+                              _showCreatePoll();
+                            },
+                            icon: Icon(Icons.add),
+                            label: Text('Create Poll'),
+                            style: TextButton.styleFrom(
+                              foregroundColor: Colors.blue,
+                            ),
+                          ),
+                        ],
+                      ),
+                    );
+                  }
+
+                  // Debug message for successful polls loading
+                  print('Successfully loaded ${polls.length} polls');
+                  
+                  return ListView.separated(
+                    controller: controller,
+                    padding: EdgeInsets.all(16),
+                    itemCount: polls.length,
+                    separatorBuilder: (context, index) => SizedBox(height: 16),
+                    itemBuilder: (context, index) {
+                      var pollData = polls[index].data() as Map<String, dynamic>;
+                      String messageId = polls[index].id;
+                      
+                      return Card(
+                        elevation: 0,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          side: BorderSide(color: Colors.grey[200]!),
+                        ),
+                        child: Padding(
+                          padding: EdgeInsets.all(16),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              // Poll content
+                              PollMessage(
+                                message: pollData,
+                                groupId: widget.groupId,
+                                messageId: messageId,
+                              ),
+                            ],
+                          ),
+                        ),
+                      );
+                    },
+                  );
+                },
+              ),
+            ),
+          ],
+        ),
+      ),
+    ),
   );
 }
 
@@ -1493,35 +2105,45 @@ void _inviteMultipleFriends(Set<String> friendIds) async {
     }
   }
 
-  void _addActivity() {
-    showDialog(
-      context: context,
-      builder: (context) => ActivityDialog(
-        onSave: (name, description) {
-          FirebaseFirestore.instance.collection('groups').doc(widget.groupId).update({
-            'activities': FieldValue.arrayUnion([{'name': name, 'description': description}])
-          });
-        },
-      ),
-    );
-  }
+void _addActivity() {
+  // Initialize GooglePlace instance
+  final googlePlace = GooglePlace('AIzaSyCrQnPUOQ6ho_LItD4mC1yRFcA0SEWKYBM');
+
+  showModalBottomSheet(
+    context: context,
+    isScrollControlled: true,
+    backgroundColor: Colors.transparent,
+    builder: (context) => ActivityBottomSheet(
+      googlePlace: googlePlace,
+      onActivityAdded: (activity) async {
+        await FirebaseFirestore.instance.collection('groups').doc(widget.groupId).update({
+          'activities': FieldValue.arrayUnion([activity.toMap()])
+        });
+      },
+    ),
+  );
+}
+
 
 void _editActivity(int index, Map<String, dynamic> activity) {
-    showDialog(
-      context: context,
-      builder: (context) => ActivityDialog(
-        initialName: activity['name'],
-        initialDescription: activity['description'],
-        onSave: (name, description) {
-          FirebaseFirestore.instance.collection('groups').doc(widget.groupId).get().then((doc) {
-            List<dynamic> activities = List.from(doc.data()!['activities']);
-            activities[index] = {'name': name, 'description': description};
-            doc.reference.update({'activities': activities});
-          });
-        },
-      ),
-    );
-  }
+  final googlePlace = GooglePlace('AIzaSyCrQnPUOQ6ho_LItD4mC1yRFcA0SEWKYBM');
+
+  showModalBottomSheet(
+    context: context,
+    isScrollControlled: true,
+    backgroundColor: Colors.transparent,
+    builder: (context) => ActivityBottomSheet(
+      googlePlace: googlePlace,
+      onActivityAdded: (activity) async {
+        await FirebaseFirestore.instance.collection('groups').doc(widget.groupId).get().then((doc) {
+          List<dynamic> activities = List.from(doc.data()!['activities']);
+          activities[index] = activity.toMap();
+          doc.reference.update({'activities': activities});
+        });
+      },
+    ),
+  );
+}
 
   
 
@@ -1584,7 +2206,7 @@ Future<void> _submitPost() async {
   }
 }
 
-class ActivityDialog extends StatefulWidget {
+/* class ActivityDialog extends StatefulWidget {
   final String? initialName;
   final String? initialDescription;
   final Function(String, String) onSave;
@@ -1646,6 +2268,333 @@ class _ActivityDialogState extends State<ActivityDialog> {
     super.dispose();
   }
 }
+ */
+
+class ActivityBottomSheet extends StatefulWidget {
+  final Function(Activity) onActivityAdded;
+  final GooglePlace googlePlace;
+
+  const ActivityBottomSheet({
+    Key? key,
+    required this.onActivityAdded,
+    required this.googlePlace,
+  }) : super(key: key);
+
+  @override
+  _ActivityBottomSheetState createState() => _ActivityBottomSheetState();
+}
+
+class _ActivityBottomSheetState extends State<ActivityBottomSheet> {
+  final TextEditingController _searchController = TextEditingController();
+  final TextEditingController _descriptionController = TextEditingController();
+  List<AutocompletePrediction> _predictions = [];
+  bool _isDescriptionMode = false;
+  AutocompletePrediction? _selectedPrediction;
+  String? _selectedAddress;
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    _descriptionController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return DraggableScrollableSheet(
+      initialChildSize: 0.9,
+      minChildSize: 0.5,
+      maxChildSize: 0.9,
+      builder: (_, controller) => Container(
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Drag Handle
+            Center(
+              child: Container(
+                margin: EdgeInsets.only(top: 12),
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: Colors.grey[300],
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+            ),
+
+            // Header
+            Padding(
+              padding: const EdgeInsets.all(16.0),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    _isDescriptionMode ? 'Add activity details' : 'Add place',
+                    style: TextStyle(
+                      fontSize: 20,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  IconButton(
+                    icon: Icon(Icons.close),
+                    onPressed: () {
+                      _searchController.clear();
+                      Navigator.pop(context);
+                    },
+                  ),
+                ],
+              ),
+            ),
+            Divider(height: 1),
+
+            if (!_isDescriptionMode) ...[
+              // Search Mode UI
+              Padding(
+                padding: const EdgeInsets.all(16.0),
+                child: TextField(
+                  controller: _searchController,
+                  decoration: InputDecoration(
+                    hintText: 'Search places',
+                    prefixIcon: Icon(Icons.search),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: BorderSide.none,
+                    ),
+                    filled: true,
+                    fillColor: Colors.grey[100],
+                  ),
+                  onChanged: _onSearchChanged,
+                ),
+              ),
+              Expanded(
+                child: _predictions.isEmpty
+                    ? Center(
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(Icons.location_on_outlined, 
+                              size: 48, 
+                              color: Colors.grey
+                            ),
+                            SizedBox(height: 16),
+                            Text(
+                              'Search a location to add to your activity',
+                              style: TextStyle(
+                                color: Colors.grey[600],
+                                fontSize: 16,
+                              ),
+                            ),
+                          ],
+                        ),
+                      )
+                    : ListView.builder(
+                        controller: controller,
+                        itemCount: _predictions.length,
+                        itemBuilder: (context, index) {
+                          final prediction = _predictions[index];
+                          return ListTile(
+                            leading: Icon(Icons.location_on_outlined),
+                            title: Text(prediction.description ?? "Unknown"),
+                            onTap: () {
+                              setState(() {
+                                _selectedPrediction = prediction;
+                                _selectedAddress = prediction.description;
+                                _isDescriptionMode = true;
+                                _predictions = [];
+                                _searchController.clear();
+                              });
+                            },
+                          );
+                        },
+                      ),
+              ),
+            ] else ...[
+              // Description Mode UI
+              if (_selectedAddress != null) ...[
+                SizedBox(height: 16),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  child: Container(
+                    padding: EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: Colors.grey[100],
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(Icons.place, color: Colors.grey[600]),
+                        SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                _extractPlaceName(_selectedAddress!),
+                                style: TextStyle(
+                                  fontWeight: FontWeight.w600,
+                                  fontSize: 16,
+                                ),
+                              ),
+                              Text(
+                                _selectedAddress!.substring(_extractPlaceName(_selectedAddress!).length + 2),
+                                style: TextStyle(
+                                  color: Colors.grey[600],
+                                  fontSize: 14,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                SizedBox(height: 16),
+                Padding(
+                  padding: EdgeInsets.fromLTRB(16, 0, 16, MediaQuery.of(context).viewInsets.bottom + 16),
+                  child: TextField(
+                    controller: _descriptionController,
+                    decoration: InputDecoration(
+                      hintText: 'Write something about this place...',
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: BorderSide(color: Colors.grey[300]!),
+                      ),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: BorderSide(color: Colors.grey[300]!),
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: BorderSide(color: Colors.black),
+                      ),
+                      filled: true,
+                      fillColor: Colors.grey[50],
+                      contentPadding: EdgeInsets.all(16),
+                    ),
+                    maxLines: null,
+                    style: TextStyle(fontSize: 16),
+                  ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: ElevatedButton(
+                    onPressed: () => _addActivity(context),
+                    child: Text('Add Activity'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.black,
+                      foregroundColor: Colors.white,
+                      padding: EdgeInsets.symmetric(vertical: 16),
+                      minimumSize: Size(double.infinity, 50),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _onSearchChanged(String value) async {
+    if (value.isNotEmpty) {
+      try {
+        var result = await widget.googlePlace.autocomplete.get(
+          value,
+          components: [Component("country", "us")],
+        );
+        
+        if (result != null && result.predictions != null && mounted) {
+          setState(() {
+            _predictions = result.predictions!;
+          });
+        }
+      } catch (e) {
+        print("Error during places search: $e");
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Error fetching places: $e')),
+          );
+        }
+      }
+    } else {
+      setState(() {
+        _predictions = [];
+      });
+    }
+  }
+
+  String _extractPlaceName(String fullAddress) {
+    return fullAddress.split(',')[0].trim();
+  }
+
+  Future<void> _addActivity(BuildContext context) async {
+    if (_selectedPrediction != null) {
+      var result = await widget.googlePlace.details.get(_selectedPrediction!.placeId ?? '');
+      Map<String, double>? location;
+      
+      if (result != null && result.result != null) {
+        final lat = result.result?.geometry?.location?.lat;
+        final lng = result.result?.geometry?.location?.lng;
+        if (lat != null && lng != null) {
+          location = {
+            'lat': lat,
+            'lng': lng
+          };
+        }
+      }
+
+      final activity = Activity(
+        name: _extractPlaceName(_selectedAddress!),
+        description: _descriptionController.text.trim(),
+        placeDescription: _selectedAddress,
+        location: location,
+      );
+
+      widget.onActivityAdded(activity);
+      Navigator.pop(context);
+      
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Added ${activity.name}'),
+          duration: Duration(seconds: 2),
+        ),
+      );
+    }
+  }
+}
+
+class Activity {
+  final String name;
+  final String description;
+  final String? placeDescription;
+  final Map<String, double>? location;
+  final Key key;
+
+  Activity({
+    required this.name,
+    this.description = '',
+    this.placeDescription,
+    this.location,
+  }) : key = UniqueKey();
+
+  Map<String, dynamic> toMap() {
+    return {
+      'name': name,
+      'description': description,
+      'placeDescription': placeDescription,
+      'location': location,
+    };
+  }
+}
 
 class _SliverAppBarDelegate extends SliverPersistentHeaderDelegate {
   _SliverAppBarDelegate(this._tabBar);
@@ -1670,5 +2619,3 @@ class _SliverAppBarDelegate extends SliverPersistentHeaderDelegate {
     return false;
   }
 }
-
-

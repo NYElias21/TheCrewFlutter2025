@@ -6,7 +6,8 @@ import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'profile_page.dart';
 import 'package:flutter/services.dart';
 import 'dart:ui' as ui;
-
+import 'location_detail_sheet.dart';
+import 'package:google_place/google_place.dart';
 
 class PostDetailPage extends StatefulWidget {
   final DocumentSnapshot post;
@@ -18,6 +19,7 @@ class PostDetailPage extends StatefulWidget {
 }
 
 class _PostDetailPageState extends State<PostDetailPage> {
+  late final GooglePlace googlePlace;
   bool isFollowing = false;
   int _currentImageIndex = 0;
   late String currentUserId;
@@ -29,16 +31,19 @@ class _PostDetailPageState extends State<PostDetailPage> {
   FocusNode _commentFocusNode = FocusNode();
   List<Comment> comments = [];
 
-  @override
-  void initState() {
-    super.initState();
-    currentUserId = FirebaseAuth.instance.currentUser!.uid;
-    postUserId = widget.post['userId'];
-    likes = widget.post['likes'] ?? 0;
-    _checkIfFollowing();
-    _loadLikedAndSavedPosts();
-    _loadComments();
-  }
+@override
+void initState() {
+  super.initState();
+  // Initialize googlePlace first
+  googlePlace = GooglePlace('AIzaSyCrQnPUOQ6ho_LItD4mC1yRFcA0SEWKYBM');
+  // Then initialize other variables
+  currentUserId = FirebaseAuth.instance.currentUser!.uid;
+  postUserId = widget.post['userId'];
+  likes = widget.post['likes'] ?? 0;
+  _checkIfFollowing();
+  _loadLikedAndSavedPosts();
+  _loadComments();
+}
 
   @override
   void dispose() {
@@ -46,6 +51,20 @@ class _PostDetailPageState extends State<PostDetailPage> {
     _commentController.dispose();
     super.dispose();
   }
+
+
+void _showPlaceDetails(BuildContext context, Map<String, dynamic> activity) {
+  showModalBottomSheet(
+    context: context,
+    isScrollControlled: true,
+    backgroundColor: Colors.transparent,
+    builder: (context) => LocationDetailSheet(
+      activity: activity,
+      googlePlace: googlePlace,  
+      placeId: activity['placeId'],
+    ),
+  );
+}
 
   Future<void> _checkIfFollowing() async {
     DocumentSnapshot userDoc = await FirebaseFirestore.instance
@@ -940,21 +959,33 @@ Widget _buildPostDetails(String title, String description, String postType) {
             return Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                RichText(
-                  text: TextSpan(
-                    style: TextStyle(fontSize: 16, color: Colors.black),
-                    children: [
-                      TextSpan(text: '${index + 1}. '),
-                      TextSpan(
-                        text: '${activity['name']}',
-                        style: TextStyle(
-                          color: Color(0xFF2E7D32),
-                          fontWeight: FontWeight.w500,
-                        ),
+                GestureDetector(
+                  onTap: () => _showPlaceDetails(context, activity),
+                  child: Container(
+                    margin: EdgeInsets.only(bottom: 8),
+                    child: RichText(
+                      text: TextSpan(
+                        style: TextStyle(fontSize: 16, color: Colors.black),
+                        children: [
+                          TextSpan(text: '${index + 1}. '),
+                          TextSpan(
+                            text: '${activity['name']}',
+                            style: TextStyle(
+                              color: Color(0xFF2E7D32),
+                              fontWeight: FontWeight.w500,
+                              //decoration: TextDecoration.underline, // Added underline to show it's interactive
+                            ),
+                          ),
+                          if (activity['description'] != null)
+                            TextSpan(
+                              text: ': ${activity['description']}',
+                              style: TextStyle(
+                                decoration: TextDecoration.none, // Ensure description isn't underlined
+                              ),
+                            ),
+                        ],
                       ),
-                      if (activity['description'] != null)
-                        TextSpan(text: ': ${activity['description']}'),
-                    ],
+                    ),
                   ),
                 ),
                 SizedBox(height: 8),
@@ -1593,7 +1624,7 @@ class Comment {
   }
 }
 
-void _showPlaceDetails(BuildContext context, Map<String, dynamic> activity) {
+/* void _showPlaceDetails(BuildContext context, Map<String, dynamic> activity) {
   showModalBottomSheet(
     context: context,
     isScrollControlled: true,
@@ -1784,3 +1815,4 @@ void _showPlaceDetails(BuildContext context, Map<String, dynamic> activity) {
   );
 }
 
+ */
