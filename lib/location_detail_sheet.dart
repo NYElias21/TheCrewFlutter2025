@@ -26,6 +26,8 @@ class _LocationDetailSheetState extends State<LocationDetailSheet> {
   List<Photo>? photos;
   bool isLoading = true;
   List<Map<String, dynamic>> featuredPosts = [];
+  bool showAllPosts = false;
+  static const int postsPerPage = 4;
 
   @override
   void initState() {
@@ -34,41 +36,39 @@ class _LocationDetailSheetState extends State<LocationDetailSheet> {
     _getFeaturedPosts();
   }
 
-Future<void> _getFeaturedPosts() async {
-  try {
-    final locationName = placeDetails?.name ?? widget.activity['name'];
-    print("⭐️ Searching for posts with locationName: $locationName");
-    
-    // First get all posts
-    final querySnapshot = await FirebaseFirestore.instance
-        .collection('posts')
-        .get();
-
-    // Then filter posts that have matching activity names
-    final filteredPosts = querySnapshot.docs.where((doc) {
-      final data = doc.data();
-      final activities = data['activities'] as List<dynamic>?;
-      if (activities == null) return false;
+  Future<void> _getFeaturedPosts() async {
+    try {
+      final locationName = placeDetails?.name ?? widget.activity['name'];
+      print("⭐️ Searching for posts with locationName: $locationName");
       
-      return activities.any((activity) => 
-        (activity as Map<String, dynamic>)['name'] == locationName
-      );
-    }).toList();
+      final querySnapshot = await FirebaseFirestore.instance
+          .collection('posts')
+          .get();
 
-    print("⭐️ Found ${filteredPosts.length} posts");
-    
-    setState(() {
-      featuredPosts = filteredPosts
-          .map((doc) => {
-                ...doc.data() as Map<String, dynamic>,
-                'id': doc.id,
-              })
-          .toList();
-    });
-  } catch (e) {
-    print('⭐️ Error fetching featured posts: $e');
+      final filteredPosts = querySnapshot.docs.where((doc) {
+        final data = doc.data();
+        final activities = data['activities'] as List<dynamic>?;
+        if (activities == null) return false;
+        
+        return activities.any((activity) => 
+          (activity as Map<String, dynamic>)['name'] == locationName
+        );
+      }).toList();
+
+      print("⭐️ Found ${filteredPosts.length} posts");
+      
+      setState(() {
+        featuredPosts = filteredPosts
+            .map((doc) => {
+                  ...doc.data() as Map<String, dynamic>,
+                  'id': doc.id,
+                })
+            .toList();
+      });
+    } catch (e) {
+      print('⭐️ Error fetching featured posts: $e');
+    }
   }
-}
 
   Future<void> _getPlaceDetails() async {
     setState(() {
@@ -178,6 +178,10 @@ Future<void> _getFeaturedPosts() async {
   Widget _buildFeaturedSection() {
     if (featuredPosts.isEmpty) return SizedBox.shrink();
 
+    final displayedPosts = showAllPosts 
+        ? featuredPosts 
+        : featuredPosts.take(postsPerPage).toList();
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -191,128 +195,151 @@ Future<void> _getFeaturedPosts() async {
             ),
           ),
         ),
-        ...featuredPosts.map((post) => _buildFeaturedPostCard(post)).toList(),
+        ...displayedPosts.map((post) => _buildFeaturedPostCard(post)).toList(),
+        if (featuredPosts.length > postsPerPage)
+          Padding(
+            padding: const EdgeInsets.only(top: 8.0),
+            child: TextButton(
+              onPressed: () {
+                setState(() {
+                  showAllPosts = !showAllPosts;
+                });
+              },
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Text(
+                    showAllPosts ? 'Show Less' : 'See More',
+                    style: TextStyle(
+                      color: Colors.blue,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  Icon(
+                    showAllPosts ? Icons.keyboard_arrow_up : Icons.keyboard_arrow_down,
+                    color: Colors.blue,
+                  ),
+                ],
+              ),
+            ),
+          ),
       ],
     );
   }
 
-Widget _buildFeaturedPostCard(Map<String, dynamic> post) {
- final List<dynamic>? imageUrls = post['imageUrls'];
- final String imageUrl = imageUrls != null && imageUrls.isNotEmpty 
-     ? imageUrls[0] 
-     : 'https://via.placeholder.com/80';
- final String userId = post['userId'] ?? '';
+  Widget _buildFeaturedPostCard(Map<String, dynamic> post) {
+    final List<dynamic>? imageUrls = post['imageUrls'];
+    final String imageUrl = imageUrls != null && imageUrls.isNotEmpty 
+        ? imageUrls[0] 
+        : 'https://via.placeholder.com/80';
+    final String userId = post['userId'] ?? '';
 
- return Padding(
-   padding: const EdgeInsets.only(bottom: 16.0),
-   child: InkWell(
-     onTap: () async {
-       final postDoc = await FirebaseFirestore.instance
-           .collection('posts')
-           .doc(post['id'])
-           .get();
-           
-       Navigator.push(
-         context,
-         MaterialPageRoute(
-           builder: (context) => PostDetailPage(post: postDoc),
-         ),
-       );
-     },
-     child: Column(
-       crossAxisAlignment: CrossAxisAlignment.start,
-       children: [
-         // Top row containing image, title, and user info
-         Row(
-           children: [
-             // Image
-             ClipRRect(
-               borderRadius: BorderRadius.circular(8),
-               child: Container(
-                 width: 80,
-                 height: 80,
-                 child: Image.network(
-                   imageUrl,
-                   fit: BoxFit.cover,
-                 ),
-               ),
-             ),
-             SizedBox(width: 12),
-             // Title and user info column
-             Expanded(
-               child: Container(
-                 height: 80, // Match the height of the image
-                 child: Column(
-                   mainAxisAlignment: MainAxisAlignment.center, // Center content vertically
-                   crossAxisAlignment: CrossAxisAlignment.start,
-                   children: [
-                     Text(
-                       post['title'] ?? 'Untitled Post',
-                       style: TextStyle(
-                         fontSize: 16,
-                         fontWeight: FontWeight.w600,
-                       ),
-                       maxLines: 2,
-                       overflow: TextOverflow.ellipsis,
-                     ),
-                     SizedBox(height: 4),
-                     Row(
-                       children: [
-                         FutureBuilder<DocumentSnapshot>(
-                           future: FirebaseFirestore.instance
-                               .collection('users')
-                               .doc(userId)
-                               .get(),
-                           builder: (context, snapshot) {
-                             String photoUrl = '';
-                             if (snapshot.hasData && snapshot.data != null) {
-                               photoUrl = snapshot.data!['photoURL'] ?? '';
-                             }
-                             return CircleAvatar(
-                               radius: 10,
-                               backgroundColor: Colors.grey[300],
-                               backgroundImage: photoUrl.isNotEmpty ? NetworkImage(photoUrl) : null,
-                               child: photoUrl.isEmpty
-                                   ? Icon(Icons.person, size: 12, color: Colors.grey[600])
-                                   : null,
-                             );
-                           },
-                         ),
-                         SizedBox(width: 4),
-                         Text(
-                           post['username'] ?? 'Unknown User',
-                           style: TextStyle(
-                             color: Colors.grey[600],
-                             fontSize: 14,
-                           ),
-                         ),
-                       ],
-                     ),
-                   ],
-                 ),
-               ),
-             ),
-           ],
-         ),
-         // Description under everything
-         if (post['description'] != null && post['description'].toString().isNotEmpty)
-           Padding(
-             padding: const EdgeInsets.only(top: 8.0),
-             child: Text(
-               post['description'],
-               style: TextStyle(
-                 fontSize: 14,
-                 color: Colors.grey[600],
-               ),
-               maxLines: 2,
-               overflow: TextOverflow.ellipsis,
-             ),
-           ),
-       ],
-     ),
-   ),
- );
-}
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 16.0),
+      child: InkWell(
+        onTap: () async {
+          final postDoc = await FirebaseFirestore.instance
+              .collection('posts')
+              .doc(post['id'])
+              .get();
+              
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (context) => PostDetailPage(post: postDoc),
+            ),
+          );
+        },
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(8),
+                  child: Container(
+                    width: 80,
+                    height: 80,
+                    child: Image.network(
+                      imageUrl,
+                      fit: BoxFit.cover,
+                    ),
+                  ),
+                ),
+                SizedBox(width: 12),
+                Expanded(
+                  child: Container(
+                    height: 80,
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          post['title'] ?? 'Untitled Post',
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w600,
+                          ),
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        SizedBox(height: 4),
+                        Row(
+                          children: [
+                            FutureBuilder<DocumentSnapshot>(
+                              future: FirebaseFirestore.instance
+                                  .collection('users')
+                                  .doc(userId)
+                                  .get(),
+                              builder: (context, snapshot) {
+                                String photoUrl = '';
+                                if (snapshot.hasData && snapshot.data != null) {
+                                  photoUrl = snapshot.data!['photoURL'] ?? '';
+                                }
+                                return CircleAvatar(
+                                  radius: 10,
+                                  backgroundColor: Colors.grey[300],
+                                  backgroundImage: photoUrl.isNotEmpty ? NetworkImage(photoUrl) : null,
+                                  child: photoUrl.isEmpty
+                                      ? Icon(Icons.person, size: 12, color: Colors.grey[600])
+                                      : null,
+                                );
+                              },
+                            ),
+                            SizedBox(width: 4),
+                            Text(
+                              post['username'] ?? 'Unknown User',
+                              style: TextStyle(
+                                color: Colors.grey[600],
+                                fontSize: 14,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            if (post['description'] != null && post['description'].toString().isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.only(top: 8.0),
+                child: Text(
+                  post['description'],
+                  style: TextStyle(
+                    fontSize: 14,
+                    color: Colors.grey[600],
+                  ),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
