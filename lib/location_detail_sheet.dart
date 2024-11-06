@@ -197,7 +197,6 @@ Future<void> _getFeaturedPosts() async {
   }
 
 Widget _buildFeaturedPostCard(Map<String, dynamic> post) {
- // Get the first image URL from the imageUrls array
  final List<dynamic>? imageUrls = post['imageUrls'];
  final String imageUrl = imageUrls != null && imageUrls.isNotEmpty 
      ? imageUrls[0] 
@@ -208,7 +207,6 @@ Widget _buildFeaturedPostCard(Map<String, dynamic> post) {
    padding: const EdgeInsets.only(bottom: 16.0),
    child: InkWell(
      onTap: () async {
-       // Get the DocumentSnapshot for this post
        final postDoc = await FirebaseFirestore.instance
            .collection('posts')
            .doc(post['id'])
@@ -221,70 +219,95 @@ Widget _buildFeaturedPostCard(Map<String, dynamic> post) {
          ),
        );
      },
-     child: Row(
+     child: Column(
        crossAxisAlignment: CrossAxisAlignment.start,
        children: [
-         ClipRRect(
-           borderRadius: BorderRadius.circular(8),
-           child: Container(
-             width: 80,
-             height: 80,
-             child: Image.network(
-               imageUrl,
-               fit: BoxFit.cover,
+         // Top row containing image, title, and user info
+         Row(
+           children: [
+             // Image
+             ClipRRect(
+               borderRadius: BorderRadius.circular(8),
+               child: Container(
+                 width: 80,
+                 height: 80,
+                 child: Image.network(
+                   imageUrl,
+                   fit: BoxFit.cover,
+                 ),
+               ),
+             ),
+             SizedBox(width: 12),
+             // Title and user info column
+             Expanded(
+               child: Container(
+                 height: 80, // Match the height of the image
+                 child: Column(
+                   mainAxisAlignment: MainAxisAlignment.center, // Center content vertically
+                   crossAxisAlignment: CrossAxisAlignment.start,
+                   children: [
+                     Text(
+                       post['title'] ?? 'Untitled Post',
+                       style: TextStyle(
+                         fontSize: 16,
+                         fontWeight: FontWeight.w600,
+                       ),
+                       maxLines: 2,
+                       overflow: TextOverflow.ellipsis,
+                     ),
+                     SizedBox(height: 4),
+                     Row(
+                       children: [
+                         FutureBuilder<DocumentSnapshot>(
+                           future: FirebaseFirestore.instance
+                               .collection('users')
+                               .doc(userId)
+                               .get(),
+                           builder: (context, snapshot) {
+                             String photoUrl = '';
+                             if (snapshot.hasData && snapshot.data != null) {
+                               photoUrl = snapshot.data!['photoURL'] ?? '';
+                             }
+                             return CircleAvatar(
+                               radius: 10,
+                               backgroundColor: Colors.grey[300],
+                               backgroundImage: photoUrl.isNotEmpty ? NetworkImage(photoUrl) : null,
+                               child: photoUrl.isEmpty
+                                   ? Icon(Icons.person, size: 12, color: Colors.grey[600])
+                                   : null,
+                             );
+                           },
+                         ),
+                         SizedBox(width: 4),
+                         Text(
+                           post['username'] ?? 'Unknown User',
+                           style: TextStyle(
+                             color: Colors.grey[600],
+                             fontSize: 14,
+                           ),
+                         ),
+                       ],
+                     ),
+                   ],
+                 ),
+               ),
+             ),
+           ],
+         ),
+         // Description under everything
+         if (post['description'] != null && post['description'].toString().isNotEmpty)
+           Padding(
+             padding: const EdgeInsets.only(top: 8.0),
+             child: Text(
+               post['description'],
+               style: TextStyle(
+                 fontSize: 14,
+                 color: Colors.grey[600],
+               ),
+               maxLines: 2,
+               overflow: TextOverflow.ellipsis,
              ),
            ),
-         ),
-         SizedBox(width: 12),
-         Expanded(
-           child: Column(
-             crossAxisAlignment: CrossAxisAlignment.start,
-             children: [
-               Text(
-                 post['title'] ?? 'Untitled Post',
-                 style: TextStyle(
-                   fontSize: 16,
-                   fontWeight: FontWeight.w600,
-                 ),
-                 maxLines: 2,
-                 overflow: TextOverflow.ellipsis,
-               ),
-               SizedBox(height: 4),
-               Row(
-                 children: [
-                   FutureBuilder<DocumentSnapshot>(
-                     future: FirebaseFirestore.instance
-                         .collection('users')
-                         .doc(userId)
-                         .get(),
-                     builder: (context, snapshot) {
-                       String photoUrl = '';
-                       if (snapshot.hasData && snapshot.data != null) {
-                         photoUrl = snapshot.data!['photoURL'] ?? '';
-                       }
-                       return CircleAvatar(
-                         radius: 10,
-                         backgroundColor: Colors.grey[300],
-                         backgroundImage: photoUrl.isNotEmpty ? NetworkImage(photoUrl) : null,
-                         child: photoUrl.isEmpty
-                             ? Icon(Icons.person, size: 12, color: Colors.grey[600])
-                             : null,
-                       );
-                     },
-                   ),
-                   SizedBox(width: 4),
-                   Text(
-                     post['username'] ?? 'Unknown User',
-                     style: TextStyle(
-                       color: Colors.grey[600],
-                       fontSize: 14,
-                     ),
-                   ),
-                 ],
-               ),
-             ],
-           ),
-         ),
        ],
      ),
    ),
