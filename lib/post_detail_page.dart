@@ -30,6 +30,7 @@ class _PostDetailPageState extends State<PostDetailPage> {
   TextEditingController _commentController = TextEditingController();
   FocusNode _commentFocusNode = FocusNode();
   List<Comment> comments = [];
+  Comment? replyingTo;
 
 @override
 void initState() {
@@ -559,20 +560,40 @@ void _saveSharedPost(String caption, bool isGroupActivity) async {
   }
 }
 
-  Future<void> _loadComments() async {
-    QuerySnapshot commentSnapshot = await FirebaseFirestore.instance
-        .collection('posts')
-        .doc(widget.post.id)
-        .collection('comments')
-        .orderBy('timestamp', descending: true)
-        .get();
+Future<void> _loadComments() async {
+  // First, load all comments
+  QuerySnapshot commentSnapshot = await FirebaseFirestore.instance
+      .collection('posts')
+      .doc(widget.post.id)
+      .collection('comments')
+      .orderBy('timestamp', descending: true)
+      .get();
 
-    setState(() {
-      comments = commentSnapshot.docs
-          .map((doc) => Comment.fromDocument(doc))
-          .toList();
-    });
+  // Separate top-level comments and replies
+  List<Comment> topLevelComments = [];
+  Map<String, List<Comment>> replies = {};
+
+  for (var doc in commentSnapshot.docs) {
+    Comment comment = Comment.fromDocument(doc);
+    if (comment.parentId == null) {
+      topLevelComments.add(comment);
+    } else {
+      replies[comment.parentId!] = replies[comment.parentId!] ?? [];
+      replies[comment.parentId!]!.add(comment);
+    }
   }
+
+  // Attach replies to their parent comments
+  for (var comment in topLevelComments) {
+    if (replies.containsKey(comment.id)) {
+      comment.replies = replies[comment.id]!;
+    }
+  }
+
+  setState(() {
+    comments = topLevelComments;
+  });
+}
 
   Future<void> _addComment() async {
     if (_commentController.text.isNotEmpty) {
@@ -1201,7 +1222,7 @@ Widget _buildCommentSection() {
       Padding(
         padding: const EdgeInsets.fromLTRB(16.0, 16.0, 16.0, 8.0),
         child: Text(
-          '${comments.length} Comments',
+          '${_getTotalCommentCount()} Comments', // Update this line too while we're at it
           style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
         ),
       ),
@@ -1218,106 +1239,283 @@ Widget _buildCommentSection() {
   );
 }
 
+// Add the new method here
+int _getTotalCommentCount() {
+  int total = 0;
+  for (var comment in comments) {
+    // Count the top-level comment
+    total++;
+    // Add the number of replies
+    total += comment.replies.length;
+  }
+  return total;
+}
+
 Widget _buildCommentInput() {
   return Container(
     padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
     decoration: BoxDecoration(
       border: Border(top: BorderSide(color: Colors.grey[300]!, width: 0.5)),
     ),
-    child: Row(
+    child: Column(
+      mainAxisSize: MainAxisSize.min,
       children: [
-        Expanded(
-          child: TextField(
-            controller: _commentController,
-            focusNode: _commentFocusNode,
-            decoration: InputDecoration(
-              hintText: 'Say something...',
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(20),
-                borderSide: BorderSide(color: Colors.grey[300]!),
-              ),
-              contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-              isDense: true,
+        if (replyingTo != null)
+          Container(
+            padding: EdgeInsets.only(bottom: 8),
+            child: Row(
+              children: [
+                Text(
+                  'Replying to ',
+                  style: TextStyle(color: Colors.grey[600], fontSize: 12),
+                ),
+                Text(
+                  replyingTo!.username,
+                  style: TextStyle(
+                    color: Colors.grey[600],
+                    fontWeight: FontWeight.bold,
+                    fontSize: 12,
+                  ),
+                ),
+                Spacer(),
+                GestureDetector(
+                  onTap: () {
+                    setState(() {
+                      replyingTo = null;
+                    });
+                  },
+                  child: Icon(Icons.close, size: 16, color: Colors.grey[600]),
+                ),
+              ],
             ),
-            style: TextStyle(fontSize: 14),
           ),
-        ),
-        SizedBox(width: 8),
-        GestureDetector(
-          onTap: () {
-            _addComment();
-            _commentFocusNode.unfocus();
-          },
-          child: Text(
-            'Post',
-            style: TextStyle(color: Colors.blue, fontWeight: FontWeight.bold),
-          ),
+        Row(
+          children: [
+            Expanded(
+              child: TextField(
+                controller: _commentController,
+                focusNode: _commentFocusNode,
+                decoration: InputDecoration(
+                  hintText: replyingTo != null 
+                      ? 'Write a reply...' 
+                      : 'Write a comment...',
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(20),
+                    borderSide: BorderSide(color: Colors.grey[300]!),
+                  ),
+                  contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  isDense: true,
+                ),
+                style: TextStyle(fontSize: 14),
+              ),
+            ),
+            SizedBox(width: 8),
+            GestureDetector(
+              onTap: () {
+                if (replyingTo != null) {
+                  _addReply(replyingTo!);
+                } else {
+                  _addComment();
+                }
+                _commentFocusNode.unfocus();
+              },
+              child: Text(
+                replyingTo != null ? 'Reply' : 'Post',
+                style: TextStyle(color: Colors.blue, fontWeight: FontWeight.bold),
+              ),
+            ),
+          ],
         ),
       ],
     ),
   );
 }
 
-Widget _buildCommentItem(Comment comment) {
-    bool isCurrentUserComment = comment.userId == currentUserId;
-    return GestureDetector(
-      onLongPress: isCurrentUserComment ? () => _showCommentOptions(comment) : null,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            GestureDetector(
-              onTap: () => _navigateToProfile(context, comment.userId),
-              child: FutureBuilder<DocumentSnapshot>(
-                future: FirebaseFirestore.instance.collection('users').doc(comment.userId).get(),
-                builder: (context, snapshot) {
-                  if (snapshot.connectionState == ConnectionState.waiting) {
-                    return CircleAvatar(
-                      radius: 16,
-                      backgroundColor: Colors.grey[300],
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    );
-                  }
-                  String photoURL = '';
-                  if (snapshot.hasData && snapshot.data != null) {
-                    photoURL = snapshot.data!['photoURL'] ?? '';
-                  }
-                  return _buildUserAvatar(photoURL, radius: 16);
-                },
-              ),
-            ),
-            SizedBox(width: 12),
-            Expanded(
-              child: Column(
+Future<void> _addReply(Comment parentComment) async {
+  if (_commentController.text.isNotEmpty) {
+    await FirebaseFirestore.instance
+        .collection('posts')
+        .doc(widget.post.id)
+        .collection('comments')
+        .add({
+      'userId': currentUserId,
+      'username': await _getUsernameById(currentUserId),
+      'text': _commentController.text,
+      'timestamp': FieldValue.serverTimestamp(),
+      'parentId': parentComment.id,
+    });
+
+    setState(() {
+      _commentController.clear();
+      replyingTo = null;
+    });
+    
+    _loadComments(); // Reload comments to show the new reply
+  }
+}
+
+void _showReplyInput(Comment parentComment) {
+  showModalBottomSheet(
+    context: context,
+    isScrollControlled: true,
+    builder: (context) {
+      return Padding(
+        padding: EdgeInsets.only(
+          bottom: MediaQuery.of(context).viewInsets.bottom,
+        ),
+        child: Container(
+          padding: EdgeInsets.all(16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Row(
-                    children: [
-                      GestureDetector(
-                        onTap: () => _navigateToProfile(context, comment.userId),
-                        child: Text(
-                          comment.username,
-                          style: TextStyle(fontWeight: FontWeight.bold),
-                        ),
-                      ),
-                      SizedBox(width: 8),
-                      Text(
-                        _formatTimestamp(comment.timestamp),
-                        style: TextStyle(color: Colors.grey, fontSize: 12),
-                      ),
-                    ],
+                  Text(
+                    'Replying to ',
+                    style: TextStyle(color: Colors.grey),
                   ),
-                  SizedBox(height: 4),
-                  Text(comment.text),
+                  Text(
+                    parentComment.username,
+                    style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      color: Colors.grey,
+                    ),
+                  ),
                 ],
               ),
-            ),
-          ],
+              SizedBox(height: 8),
+              Row(
+                children: [
+                  Expanded(
+                    child: TextField(
+                      controller: _commentController,
+                      autofocus: true,
+                      decoration: InputDecoration(
+                        hintText: 'Write a reply...',
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                      ),
+                    ),
+                  ),
+                  SizedBox(width: 8),
+                  TextButton(
+                    onPressed: () async {
+                      if (_commentController.text.isNotEmpty) {
+                        // Add reply to Firestore
+                        await FirebaseFirestore.instance
+                            .collection('posts')
+                            .doc(widget.post.id)
+                            .collection('comments')
+                            .add({
+                          'userId': currentUserId,
+                          'username': await _getUsernameById(currentUserId),
+                          'text': _commentController.text,
+                          'timestamp': FieldValue.serverTimestamp(),
+                          'parentId': parentComment.id, // Set parent comment ID
+                        });
+
+                        _commentController.clear();
+                        Navigator.pop(context);
+                        _loadComments(); // Reload comments to show the new reply
+                      }
+                    },
+                    child: Text('Reply'),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      );
+    },
+  );
+}
+
+Widget _buildCommentItem(Comment comment, {bool isReply = false}) {
+  bool isCurrentUserComment = comment.userId == currentUserId;
+  
+  return Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      GestureDetector(
+        onLongPress: isCurrentUserComment ? () => _showCommentOptions(comment) : null,
+        child: Padding(
+          padding: EdgeInsets.only(
+            left: isReply ? 56.0 : 16.0,
+            right: 16.0,
+            top: 8.0,
+            bottom: 8.0,
+          ),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              GestureDetector(
+                onTap: () => _navigateToProfile(context, comment.userId),
+                child: FutureBuilder<DocumentSnapshot>(
+                  future: FirebaseFirestore.instance
+                      .collection('users')
+                      .doc(comment.userId)
+                      .get(),
+                  builder: (context, snapshot) {
+                    String photoURL = '';
+                    if (snapshot.hasData && snapshot.data != null) {
+                      photoURL = snapshot.data!['photoURL'] ?? '';
+                    }
+                    return _buildUserAvatar(photoURL, radius: 16);
+                  },
+                ),
+              ),
+              SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        GestureDetector(
+                          onTap: () => _navigateToProfile(context, comment.userId),
+                          child: Text(
+                            comment.username,
+                            style: TextStyle(fontWeight: FontWeight.bold),
+                          ),
+                        ),
+                        SizedBox(width: 8),
+                        Text(
+                          _formatTimestamp(comment.timestamp),
+                          style: TextStyle(color: Colors.grey, fontSize: 12),
+                        ),
+                      ],
+                    ),
+                    SizedBox(height: 4),
+                    Text(comment.text),
+                    SizedBox(height: 4),
+                    if (!isReply) // Only show reply button for top-level comments
+                      GestureDetector(
+                        onTap: () => _showReplyInput(comment),
+                        child: Text(
+                          'Reply',
+                          style: TextStyle(
+                            color: Colors.blue,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+            ],
+          ),
         ),
       ),
-    );
-  }
+      // Show replies
+      if (!isReply && comment.replies.isNotEmpty)
+        ...comment.replies.map((reply) => _buildCommentItem(reply, isReply: true)),
+    ],
+  );
+}
 
 void _showCommentOptions(Comment comment) {
   showModalBottomSheet(
@@ -1487,16 +1685,19 @@ Widget _buildActionBar() {
                       ],
                     ),
                   ),
-                  Padding(
-                    padding: EdgeInsets.only(left: 16),
-                    child: Row(
-                      children: [
-                        Icon(Icons.chat_bubble_outline, size: 28),
-                        SizedBox(width: 4),
-                        Text(comments.length.toString(), style: TextStyle(fontSize: 14)),
-                      ],
-                    ),
-                  ),
+Padding(
+  padding: EdgeInsets.only(left: 16),
+  child: Row(
+    children: [
+      Icon(Icons.chat_bubble_outline, size: 28),
+      SizedBox(width: 4),
+      Text(
+        _getTotalCommentCount().toString(), // Replace comments.length with this
+        style: TextStyle(fontSize: 14)
+      ),
+    ],
+  ),
+),
                 ],
               ),
               GestureDetector(
@@ -1597,12 +1798,15 @@ class ActivityCard extends StatelessWidget {
   }
 } */
 
+// Update the existing Comment class
 class Comment {
   final String id;
   final String userId;
   final String username;
   final String text;
   final Timestamp timestamp;
+  final String? parentId; // Add this line - null means it's a top-level comment
+  List<Comment> replies; // Add this line
 
   Comment({
     required this.id,
@@ -1610,6 +1814,8 @@ class Comment {
     required this.username,
     required this.text,
     required this.timestamp,
+    this.parentId,
+    this.replies = const [], // Initialize empty replies list
   });
 
   factory Comment.fromDocument(DocumentSnapshot doc) {
@@ -1620,199 +1826,8 @@ class Comment {
       username: data['username'] ?? 'Unknown User',
       text: data['text'] ?? '',
       timestamp: data['timestamp'] ?? Timestamp.now(),
+      parentId: data['parentId'],
+      replies: [], // Initialize empty replies list
     );
   }
 }
-
-/* void _showPlaceDetails(BuildContext context, Map<String, dynamic> activity) {
-  showModalBottomSheet(
-    context: context,
-    isScrollControlled: true,
-    backgroundColor: Colors.transparent,
-    builder: (context) => DraggableScrollableSheet(
-      initialChildSize: 0.9,
-      minChildSize: 0.5,
-      maxChildSize: 0.95,
-      builder: (_, controller) => Container(
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            // Image carousel
-            Container(
-              height: 300,
-              child: Stack(
-                children: [
-                  CarouselSlider(
-                    options: CarouselOptions(
-                      height: 300,
-                      viewportFraction: 1.0,
-                      enableInfiniteScroll: false,
-                    ),
-                    items: [1, 2, 3].map((i) => Container(
-                      decoration: BoxDecoration(
-                        image: DecorationImage(
-                          image: NetworkImage(activity['photoUrl'] ?? 'placeholder_url'),
-                          fit: BoxFit.cover,
-                        ),
-                      ),
-                    )).toList(),
-                  ),
-                  // Share button
-                  Positioned(
-                    top: 16,
-                    right: 16,
-                    child: CircleAvatar(
-                      backgroundColor: Colors.white,
-                      child: IconButton(
-                        icon: Icon(Icons.share, color: Colors.black),
-                        onPressed: () {
-                          // Implement share functionality
-                        },
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            Expanded(
-              child: SingleChildScrollView(
-                controller: controller,
-                child: Padding(
-                  padding: const EdgeInsets.all(16.0),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      // Title and rating
-                      Text(
-                        activity['name'] ?? '',
-                        style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
-                      ),
-                      SizedBox(height: 8),
-                      Row(
-                        children: [
-                          Text(
-                            activity['placeDescription'] ?? '',
-                            style: TextStyle(color: Colors.grey[600]),
-                          ),
-                          Icon(Icons.star, color: Colors.amber, size: 16),
-                          Text('4.7 (12100)', style: TextStyle(color: Colors.grey[600])),
-                        ],
-                      ),
-                      SizedBox(height: 16),
-                      // Status
-                      Row(
-                        children: [
-                          Container(
-                            padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                            decoration: BoxDecoration(
-                              color: Colors.red[50],
-                              borderRadius: BorderRadius.circular(4),
-                            ),
-                            child: Text(
-                              'Closed',
-                              style: TextStyle(color: Colors.red),
-                            ),
-                          ),
-                          SizedBox(width: 8),
-                          Text('• Closed Tomorrow', style: TextStyle(color: Colors.grey[600])),
-                        ],
-                      ),
-                      SizedBox(height: 16),
-                      // Description
-                      Text(
-                        activity['description'] ?? '',
-                        style: TextStyle(fontSize: 16),
-                      ),
-                      SizedBox(height: 24),
-                      // Action buttons
-                      Row(
-                        children: [
-                          Expanded(
-                            child: ElevatedButton.icon(
-                              icon: Icon(Icons.directions),
-                              label: Text('Directions'),
-                              onPressed: () {
-                                // Implement directions
-                              },
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: Colors.white,
-                                foregroundColor: Colors.blue,
-                                elevation: 0,
-                                side: BorderSide(color: Colors.grey[300]!),
-                              ),
-                            ),
-                          ),
-                          SizedBox(width: 8),
-                          Expanded(
-                            child: ElevatedButton.icon(
-                              icon: Icon(Icons.language),
-                              label: Text('Website'),
-                              onPressed: () {
-                                // Implement website navigation
-                              },
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: Colors.white,
-                                foregroundColor: Colors.blue,
-                                elevation: 0,
-                                side: BorderSide(color: Colors.grey[300]!),
-                              ),
-                            ),
-                          ),
-                          SizedBox(width: 8),
-                          Expanded(
-                            child: ElevatedButton.icon(
-                              icon: Icon(Icons.phone),
-                              label: Text('Call'),
-                              onPressed: () {
-                                // Implement call
-                              },
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: Colors.white,
-                                foregroundColor: Colors.blue,
-                                elevation: 0,
-                                side: BorderSide(color: Colors.grey[300]!),
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                      SizedBox(height: 24),
-                      // Featured section
-                      Text(
-                        'Featured in...',
-                        style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-                      ),
-                      SizedBox(height: 16),
-                      // Featured card (similar to your screenshot)
-                      Card(
-                        child: ListTile(
-                          leading: ClipRRect(
-                            borderRadius: BorderRadius.circular(8),
-                            child: Image.network(
-                              activity['photoUrl'] ?? 'placeholder_url',
-                              width: 60,
-                              height: 60,
-                              fit: BoxFit.cover,
-                            ),
-                          ),
-                          title: Text('Featured Activity Title'),
-                          subtitle: Text('By Author Name'),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    ),
-  );
-}
-
- */
