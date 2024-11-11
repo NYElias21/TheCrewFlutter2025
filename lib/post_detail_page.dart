@@ -31,6 +31,7 @@ class _PostDetailPageState extends State<PostDetailPage> {
   FocusNode _commentFocusNode = FocusNode();
   List<Comment> comments = [];
   Comment? replyingTo;
+  Map<String, bool> _expandedReplies = {};
 
 @override
 void initState() {
@@ -1354,85 +1355,6 @@ Future<void> _addReply(Comment parentComment) async {
   }
 }
 
-void _showReplyInput(Comment parentComment) {
-  showModalBottomSheet(
-    context: context,
-    isScrollControlled: true,
-    builder: (context) {
-      return Padding(
-        padding: EdgeInsets.only(
-          bottom: MediaQuery.of(context).viewInsets.bottom,
-        ),
-        child: Container(
-          padding: EdgeInsets.all(16),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Replying to ',
-                    style: TextStyle(color: Colors.grey),
-                  ),
-                  Text(
-                    parentComment.username,
-                    style: TextStyle(
-                      fontWeight: FontWeight.bold,
-                      color: Colors.grey,
-                    ),
-                  ),
-                ],
-              ),
-              SizedBox(height: 8),
-              Row(
-                children: [
-                  Expanded(
-                    child: TextField(
-                      controller: _commentController,
-                      autofocus: true,
-                      decoration: InputDecoration(
-                        hintText: 'Write a reply...',
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(20),
-                        ),
-                      ),
-                    ),
-                  ),
-                  SizedBox(width: 8),
-                  TextButton(
-                    onPressed: () async {
-                      if (_commentController.text.isNotEmpty) {
-                        // Add reply to Firestore
-                        await FirebaseFirestore.instance
-                            .collection('posts')
-                            .doc(widget.post.id)
-                            .collection('comments')
-                            .add({
-                          'userId': currentUserId,
-                          'username': await _getUsernameById(currentUserId),
-                          'text': _commentController.text,
-                          'timestamp': FieldValue.serverTimestamp(),
-                          'parentId': parentComment.id, // Set parent comment ID
-                        });
-
-                        _commentController.clear();
-                        Navigator.pop(context);
-                        _loadComments(); // Reload comments to show the new reply
-                      }
-                    },
-                    child: Text('Reply'),
-                  ),
-                ],
-              ),
-            ],
-          ),
-        ),
-      );
-    },
-  );
-}
-
 Widget _buildCommentItem(Comment comment, {bool isReply = false}) {
   bool isCurrentUserComment = comment.userId == currentUserId;
   
@@ -1492,17 +1414,22 @@ Widget _buildCommentItem(Comment comment, {bool isReply = false}) {
                     Text(comment.text),
                     SizedBox(height: 4),
                     if (!isReply) // Only show reply button for top-level comments
-                      GestureDetector(
-                        onTap: () => _showReplyInput(comment),
-                        child: Text(
-                          'Reply',
-                          style: TextStyle(
-                            color: Colors.blue,
-                            fontSize: 12,
-                            fontWeight: FontWeight.w500,
-                          ),
-                        ),
-                      ),
+  GestureDetector(
+    onTap: () {
+      setState(() {
+        replyingTo = comment;
+        _commentFocusNode.requestFocus();
+      });
+    },
+    child: Text(
+      'Reply',
+      style: TextStyle(
+        color: Colors.blue,
+        fontSize: 12,
+        fontWeight: FontWeight.w500,
+      ),
+    ),
+  ),
                   ],
                 ),
               ),
@@ -1511,8 +1438,55 @@ Widget _buildCommentItem(Comment comment, {bool isReply = false}) {
         ),
       ),
       // Show replies
-      if (!isReply && comment.replies.isNotEmpty)
-        ...comment.replies.map((reply) => _buildCommentItem(reply, isReply: true)),
+if (!isReply && comment.replies.isNotEmpty)
+  Column(
+    children: [
+      // Show first 3 replies or all if expanded
+      ...comment.replies
+          .take(_expandedReplies[comment.id] == true ? comment.replies.length : 3)
+          .map((reply) => _buildCommentItem(reply, isReply: true)),
+      // Show "Show more" button if there are more than 3 replies and not expanded
+      if (comment.replies.length > 3 && _expandedReplies[comment.id] != true)
+        Padding(
+          padding: EdgeInsets.only(left: 56.0, top: 4.0),
+          child: GestureDetector(
+            onTap: () {
+              setState(() {
+                _expandedReplies[comment.id] = true;
+              });
+            },
+            child: Text(
+              'Show ${comment.replies.length - 3} more replies',
+              style: TextStyle(
+                color: Colors.blue,
+                fontSize: 12,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ),
+        ),
+      // Show "Show less" button when expanded
+      if (_expandedReplies[comment.id] == true)
+        Padding(
+          padding: EdgeInsets.only(left: 56.0, top: 4.0),
+          child: GestureDetector(
+            onTap: () {
+              setState(() {
+                _expandedReplies[comment.id] = false;
+              });
+            },
+            child: Text(
+              'Show less',
+              style: TextStyle(
+                color: Colors.blue,
+                fontSize: 12,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ),
+        ),
+    ],
+  ),
     ],
   );
 }

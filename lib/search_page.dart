@@ -1,5 +1,48 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'dart:async';  // At the top of the file with other imports
+
+class SeasonalPromotion {
+  final String id;
+  final String hashtag;
+  final String title;
+  final String subtitle;
+  final String startColorHex;
+  final String endColorHex;
+  final DateTime startDate;
+  final DateTime endDate;
+  final bool isActive;
+
+  SeasonalPromotion({
+    required this.id,
+    required this.hashtag,
+    required this.title,
+    required this.subtitle,
+    required this.startColorHex,
+    required this.endColorHex,
+    required this.startDate,
+    required this.endDate,
+    this.isActive = true,
+  });
+
+  factory SeasonalPromotion.fromFirestore(DocumentSnapshot doc) {
+    Map<String, dynamic> data = doc.data() as Map<String, dynamic>;
+    return SeasonalPromotion(
+      id: doc.id,
+      hashtag: data['hashtag'] ?? '',
+      title: data['title'] ?? '',
+      subtitle: data['subtitle'] ?? '',
+      startColorHex: data['startColorHex'] ?? '0xFFE57373',
+      endColorHex: data['endColorHex'] ?? '0xFFC62828',
+      startDate: (data['startDate'] as Timestamp).toDate(),
+      endDate: (data['endDate'] as Timestamp).toDate(),
+      isActive: data['isActive'] ?? false,
+    );
+  }
+
+  Color get startColor => Color(int.parse(startColorHex));
+  Color get endColor => Color(int.parse(endColorHex));
+}
 
 class SearchPage extends StatefulWidget {
   @override
@@ -8,9 +51,43 @@ class SearchPage extends StatefulWidget {
 
 class _SearchPageState extends State<SearchPage> {
   TextEditingController _searchController = TextEditingController();
+  final PageController _pageController = PageController();
+  Timer? _autoScrollTimer;
+  int _currentPage = 0;
+
+ @override
+void initState() {
+  super.initState();
+  // Start auto-scroll timer
+  _autoScrollTimer = Timer.periodic(Duration(seconds: 5), (timer) {
+    if (_pageController.hasClients) {
+      // Get the number of pages from the PageController
+      final int numberOfPages = _pageController.position.maxScrollExtent ~/
+          _pageController.position.viewportDimension +
+          1;
+
+      if (_currentPage >= numberOfPages - 1) {
+        // If we're at the last page, animate back to first
+        _pageController.animateToPage(
+          0,
+          duration: Duration(milliseconds: 350),
+          curve: Curves.easeInOut,
+        );
+      } else {
+        // Otherwise, go to next page
+        _pageController.nextPage(
+          duration: Duration(milliseconds: 350),
+          curve: Curves.easeInOut,
+        );
+      }
+    }
+  });
+}
 
   @override
   void dispose() {
+    _autoScrollTimer?.cancel();
+    _pageController.dispose();
     _searchController.dispose();
     super.dispose();
   }
@@ -44,12 +121,158 @@ class _SearchPageState extends State<SearchPage> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _buildSectionTitle('Editor\'s picks'),
-          _buildEditorsPicksGrid(),
+          _buildPromotionalBanner(),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Local favorites',
+                      style: TextStyle(
+                        fontSize: 24,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    Text(
+                      'Based on thousands of local votes',
+                      style: TextStyle(
+                        fontSize: 16,
+                        color: Colors.grey[600],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              _buildLocalFavorites(),
+            ],
+          ),
           _buildSectionTitle('Trending Hashtags'),
           _buildHashtagGrid(),
         ],
       ),
+    );
+  }
+
+  Widget _buildPromotionalBanner() {
+    return StreamBuilder<QuerySnapshot>(
+      stream: FirebaseFirestore.instance
+          .collection('promotions')
+          .where('isActive', isEqualTo: true)
+          .where('startDate', isLessThanOrEqualTo: Timestamp.now())
+          .where('endDate', isGreaterThanOrEqualTo: Timestamp.now())
+          .snapshots(),
+      builder: (context, snapshot) {
+        if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+          return SizedBox.shrink();
+        }
+
+        return Container(
+          height: 140,
+          child: Stack(
+            children: [
+              PageView.builder(
+                controller: _pageController,
+                onPageChanged: (int page) {
+                  setState(() {
+                    _currentPage = page;
+                  });
+                },
+                itemCount: snapshot.data!.docs.length,
+                itemBuilder: (context, index) {
+                  SeasonalPromotion promotion = SeasonalPromotion.fromFirestore(
+                    snapshot.data!.docs[index],
+                  );
+
+                  return Container(
+                    margin: EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+                    padding: EdgeInsets.all(16.0),
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(20),
+                      gradient: LinearGradient(
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                        colors: [
+                          promotion.startColor,
+                          promotion.endColor,
+                        ],
+                      ),
+                    ),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Expanded(
+                              child: Text(
+                                promotion.hashtag,
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 28,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ),
+                            Icon(
+                              Icons.star,
+                              color: Colors.yellow,
+                              size: 24,
+                            ),
+                          ],
+                        ),
+                        SizedBox(height: 4),
+                        Text(
+                          promotion.title,
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 16,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                        SizedBox(height: 4),
+                        Text(
+                          promotion.subtitle,
+                          style: TextStyle(
+                            color: Colors.white.withOpacity(0.9),
+                            fontSize: 14,
+                            fontWeight: FontWeight.w400,
+                          ),
+                        ),
+                      ],
+                    ),
+                  );
+                },
+              ),
+              Positioned(
+                bottom: 16,
+                left: 0,
+                right: 0,
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: List.generate(
+                    snapshot.data!.docs.length,
+                    (index) => Container(
+                      width: 8,
+                      height: 8,
+                      margin: EdgeInsets.symmetric(horizontal: 4),
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: _currentPage == index
+                            ? Colors.white
+                            : Colors.white.withOpacity(0.4),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
     );
   }
 
@@ -66,50 +289,69 @@ class _SearchPageState extends State<SearchPage> {
     );
   }
 
-  Widget _buildEditorsPicksGrid() {
-    // You can replace this with a Firestore query if needed
-    return Container(
-      height: 200,
-      child: ListView.builder(
-        scrollDirection: Axis.horizontal,
-        itemCount: 4, // Sample data, adjust accordingly
-        itemBuilder: (context, index) {
-          return Padding(
-            padding: const EdgeInsets.all(8.0),
-            child: Container(
-              width: 300,
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(12),
-                color: Colors.grey[200],
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Expanded(
-                    child: ClipRRect(
-                      borderRadius: BorderRadius.vertical(top: Radius.circular(12)),
-                      child: Image.network(
-                        'https://via.placeholder.com/300', // Replace with your image URL
-                        fit: BoxFit.cover,
-                        width: double.infinity,
+
+Widget _buildLocalFavorites() {
+  final List<Map<String, dynamic>> localFavorites = [
+    {
+      'icon': Icons.coffee,
+      'title': 'Cafes to work from',
+    },
+    {
+      'icon': Icons.local_bar,
+      'title': 'Top neighborhood bars',
+    },
+    {
+      'icon': Icons.wb_sunny,
+      'title': 'Places to watch sunset',
+    },
+  ];
+
+  return SingleChildScrollView(
+    scrollDirection: Axis.horizontal,
+    child: Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16.0),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start, // Align items from the top
+        children: localFavorites.map((item) {
+          return Container(
+            width: 120, // Make width smaller for better spacing
+            margin: EdgeInsets.only(right: 16), // Increase margin between items
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start, // Align text to start
+              children: [
+                AspectRatio(
+                  aspectRatio: 1,
+                  child: Container(
+                    decoration: BoxDecoration(
+                      color: Colors.grey[100],
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Center(
+                      child: Icon(
+                        item['icon'],
+                        size: 32,
+                        color: Colors.black87,
                       ),
                     ),
                   ),
-                  Padding(
-                    padding: const EdgeInsets.all(8.0),
-                    child: Text(
-                      'Best summer plans',
-                      style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-                    ),
+                ),
+                SizedBox(height: 12), // Consistent spacing
+                Text(
+                  item['title'],
+                  style: TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w500,
+                    height: 1.2, // Add line height
                   ),
-                ],
-              ),
+                ),
+              ],
             ),
           );
-        },
+        }).toList(),
       ),
-    );
-  }
+    ),
+  );
+}
 
   Widget _buildHashtagGrid() {
     // Replace this with Firestore query or real data
