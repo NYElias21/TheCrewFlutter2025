@@ -7,8 +7,9 @@ class SeasonalPromotion {
   final String hashtag;
   final String title;
   final String subtitle;
-  final String startColorHex;
-  final String endColorHex;
+  final String imageUrl;
+  //final String startColorHex;
+  //final String endColorHex;
   final DateTime startDate;
   final DateTime endDate;
   final bool isActive;
@@ -18,8 +19,9 @@ class SeasonalPromotion {
     required this.hashtag,
     required this.title,
     required this.subtitle,
-    required this.startColorHex,
-    required this.endColorHex,
+    required this.imageUrl,
+    //required this.startColorHex,
+    //required this.endColorHex,
     required this.startDate,
     required this.endDate,
     this.isActive = true,
@@ -32,16 +34,17 @@ class SeasonalPromotion {
       hashtag: data['hashtag'] ?? '',
       title: data['title'] ?? '',
       subtitle: data['subtitle'] ?? '',
-      startColorHex: data['startColorHex'] ?? '0xFFE57373',
-      endColorHex: data['endColorHex'] ?? '0xFFC62828',
+      imageUrl: data['imageUrl'] ?? '',
+      //startColorHex: data['startColorHex'] ?? '0xFFE57373',
+      //endColorHex: data['endColorHex'] ?? '0xFFC62828',
       startDate: (data['startDate'] as Timestamp).toDate(),
       endDate: (data['endDate'] as Timestamp).toDate(),
       isActive: data['isActive'] ?? false,
     );
   }
 
-  Color get startColor => Color(int.parse(startColorHex));
-  Color get endColor => Color(int.parse(endColorHex));
+  //Color get startColor => Color(int.parse(startColorHex));
+  //Color get endColor => Color(int.parse(endColorHex));
 }
 
 class SearchPage extends StatefulWidget {
@@ -157,124 +160,192 @@ void initState() {
     );
   }
 
-  Widget _buildPromotionalBanner() {
-    return StreamBuilder<QuerySnapshot>(
-      stream: FirebaseFirestore.instance
-          .collection('promotions')
-          .where('isActive', isEqualTo: true)
-          .where('startDate', isLessThanOrEqualTo: Timestamp.now())
-          .where('endDate', isGreaterThanOrEqualTo: Timestamp.now())
-          .snapshots(),
-      builder: (context, snapshot) {
-        if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
-          return SizedBox.shrink();
-        }
+Widget _buildPromotionalBanner() {
+  return StreamBuilder<QuerySnapshot>(
+    stream: FirebaseFirestore.instance
+        .collection('promotions')
+        .where('isActive', isEqualTo: true)
+        .where('startDate', isLessThanOrEqualTo: Timestamp.now())
+        .where('endDate', isGreaterThanOrEqualTo: Timestamp.now())
+        .snapshots(),
+    builder: (context, snapshot) {
+      if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+        return SizedBox.shrink();
+      }
 
-        return Container(
-          height: 140,
-          child: Stack(
-            children: [
-              PageView.builder(
-                controller: _pageController,
-                onPageChanged: (int page) {
-                  setState(() {
-                    _currentPage = page;
-                  });
-                },
-                itemCount: snapshot.data!.docs.length,
-                itemBuilder: (context, index) {
-                  SeasonalPromotion promotion = SeasonalPromotion.fromFirestore(
-                    snapshot.data!.docs[index],
-                  );
+      return Container(
+        height: 220,
+        child: Stack(
+          children: [
+            PageView.builder(
+              controller: _pageController,
+              onPageChanged: (int page) {
+                setState(() {
+                  _currentPage = page;
+                });
+              },
+              itemCount: snapshot.data!.docs.length,
+              itemBuilder: (context, index) {
+                SeasonalPromotion promotion = SeasonalPromotion.fromFirestore(
+                  snapshot.data!.docs[index],
+                );
 
-                  return Container(
-                    margin: EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
-                    padding: EdgeInsets.all(16.0),
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(20),
-                      gradient: LinearGradient(
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                        colors: [
-                          promotion.startColor,
-                          promotion.endColor,
-                        ],
+                return Container(
+                  margin: EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(20),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.2),
+                        blurRadius: 8,
+                        offset: Offset(0, 4),
                       ),
-                    ),
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      crossAxisAlignment: CrossAxisAlignment.start,
+                    ],
+                  ),
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(20),
+                    child: Stack(
+                      fit: StackFit.expand,
                       children: [
-                        Row(
-                          children: [
-                            Expanded(
-                              child: Text(
-                                promotion.hashtag,
-                                style: TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 28,
-                                  fontWeight: FontWeight.w600,
-                                ),
-                              ),
-                            ),
-                            Icon(
-                              Icons.star,
-                              color: Colors.yellow,
-                              size: 24,
-                            ),
-                          ],
+                        // Background Image
+                        Image.network(
+                          promotion.imageUrl,
+                          fit: BoxFit.cover,
+                          errorBuilder: (context, error, stackTrace) {
+                            return Container(
+                              color: Colors.grey[300],
+                              child: Icon(Icons.error),
+                            );
+                          },
                         ),
-                        SizedBox(height: 4),
-                        Text(
-                          promotion.title,
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontSize: 16,
-                            fontWeight: FontWeight.w500,
+                        // Gradient Overlay
+                        Container(
+                          decoration: BoxDecoration(
+                            gradient: LinearGradient(
+                              begin: Alignment.topCenter,
+                              end: Alignment.bottomCenter,
+                              colors: [
+                                Colors.transparent,
+                                Colors.black.withOpacity(0.8),
+                              ],
+                              stops: [0.5, 1.0], // Adjusted gradient stops
+                            ),
                           ),
                         ),
-                        SizedBox(height: 4),
-                        Text(
-                          promotion.subtitle,
-                          style: TextStyle(
-                            color: Colors.white.withOpacity(0.9),
-                            fontSize: 14,
-                            fontWeight: FontWeight.w400,
+                        // Content
+                        Padding(
+                          padding: EdgeInsets.all(24.0),
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.end,
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                crossAxisAlignment: CrossAxisAlignment.end,
+                                children: [
+                                  // Left side - Title and Subtitle
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        Text(
+                                          promotion.title,
+                                          style: TextStyle(
+                                            color: Colors.white,
+                                            fontSize: 26, // Increased font size
+                                            fontWeight: FontWeight.w800, // Made bolder
+                                            letterSpacing: -0.5, // Tighter letter spacing
+                                            height: 1.1, // Tighter line height
+                                          ),
+                                        ),
+                                        SizedBox(height: 8), // Increased spacing
+                                        Text(
+                                          promotion.subtitle,
+                                          style: TextStyle(
+                                            color: Colors.white.withOpacity(0.95),
+                                            fontSize: 18, // Increased font size
+                                            fontWeight: FontWeight.w400,
+                                            letterSpacing: 0.1,
+                                            height: 1.2,
+                                          ),
+                                          maxLines: 2,
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                  SizedBox(width: 16), // Added spacing
+                                  // Right side - More button
+                                  Container(
+                                    decoration: BoxDecoration(
+                                      color: Colors.white,
+                                      borderRadius: BorderRadius.circular(25), // More rounded
+                                    ),
+                                    child: Material(
+                                      color: Colors.transparent,
+                                      child: InkWell(
+                                        onTap: () {
+                                          // Handle more button tap
+                                        },
+                                        borderRadius: BorderRadius.circular(25),
+                                        child: Padding(
+                                          padding: EdgeInsets.symmetric(
+                                            horizontal: 20,
+                                            vertical: 10,
+                                          ),
+                                          child: Text(
+                                            'More',
+                                            style: TextStyle(
+                                              color: Colors.black,
+                                              fontSize: 15,
+                                              fontWeight: FontWeight.w600,
+                                              letterSpacing: 0.2,
+                                            ),
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ],
                           ),
                         ),
                       ],
                     ),
-                  );
-                },
-              ),
-              Positioned(
-                bottom: 16,
-                left: 0,
-                right: 0,
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: List.generate(
-                    snapshot.data!.docs.length,
-                    (index) => Container(
-                      width: 8,
-                      height: 8,
-                      margin: EdgeInsets.symmetric(horizontal: 4),
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        color: _currentPage == index
-                            ? Colors.white
-                            : Colors.white.withOpacity(0.4),
-                      ),
+                  ),
+                );
+              },
+            ),
+            // Page Indicators
+            Positioned(
+              bottom: 30, // Moved indicators up a bit
+              left: 0,
+              right: 0,
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: List.generate(
+                  snapshot.data!.docs.length,
+                  (index) => Container(
+                    width: 6, // Slightly smaller dots
+                    height: 6,
+                    margin: EdgeInsets.symmetric(horizontal: 4),
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: _currentPage == index
+                          ? Colors.white
+                          : Colors.white.withOpacity(0.4),
                     ),
                   ),
                 ),
               ),
-            ],
-          ),
-        );
-      },
-    );
-  }
+            ),
+          ],
+        ),
+      );
+    },
+  );
+}
 
   Widget _buildSectionTitle(String title) {
     return Padding(
