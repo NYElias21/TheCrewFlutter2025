@@ -9,6 +9,42 @@ import 'package:flutter/gestures.dart';
 import 'photo_editor_page.dart';
 import 'custom_photo_selector.dart';
 
+// Add this class at the top level of the file, before CreatePostPage class
+class HashtagTextController extends TextEditingController {
+  HashtagTextController({String? text}) : super(text: text);
+
+  @override
+  TextSpan buildTextSpan({required BuildContext context, TextStyle? style, required bool withComposing}) {
+    final List<InlineSpan> children = [];
+    final RegExp hashtagRegExp = RegExp(r'#\w+');
+    final String text = value.text;
+    int lastIndex = 0;
+
+    for (Match match in hashtagRegExp.allMatches(text)) {
+      if (match.start > lastIndex) {
+        children.add(TextSpan(
+          text: text.substring(lastIndex, match.start),
+          style: style,
+        ));
+      }
+      children.add(TextSpan(
+        text: text.substring(match.start, match.end),
+        // Use this specific blue color
+        style: style?.copyWith(color: Color(0xFF0095F6)) ?? TextStyle(color: Color(0xFF0095F6)),
+      ));
+      lastIndex = match.end;
+    }
+
+    if (lastIndex < text.length) {
+      children.add(TextSpan(
+        text: text.substring(lastIndex),
+        style: style,
+      ));
+    }
+
+    return TextSpan(children: children, style: style);
+  }
+}
 
 class CreatePostPage extends StatefulWidget {
   @override
@@ -19,7 +55,8 @@ class _CreatePostPageState extends State<CreatePostPage> {
   final _formKey = GlobalKey<FormState>();
   final ImagePicker _picker = ImagePicker();
   final TextEditingController _bottomSheetSearchController = TextEditingController();
-  final TextEditingController _descriptionController = TextEditingController();
+  //inal TextEditingController _descriptionController = TextEditingController();
+  final _descriptionController = HashtagTextController();
   late GooglePlace googlePlace;
   List<AutocompletePrediction> _predictions = [];
   List<XFile> _images = [];
@@ -32,6 +69,8 @@ class _CreatePostPageState extends State<CreatePostPage> {
   String _selectedCity = 'All Cities';
   List<String> _categories = ['All', 'Outdoors', 'Food', 'Dates', 'Nightlife', 'Coffee', 'Free'];
   List<String> _cities = ['All Cities', 'Charlotte', 'Raleigh', 'Asheville', 'Wilmington', 'Durham', 'Chapel Hill'];
+  final List<String> _hashtags = [];
+  static const int MAX_HASHTAGS = 4;
 
   @override
   void initState() {
@@ -130,28 +169,55 @@ children: [
     );
   }
 
+    List<String> _extractHashtags(String text) {
+    RegExp hashtagRegExp = RegExp(r'#\w+');
+    return hashtagRegExp.allMatches(text).map((match) => match.group(0)!).toList();
+  }
+
 Widget _buildDescriptionField() {
-  return Container(
-    constraints: BoxConstraints(minHeight: 100), // Give it some minimum height
-    child: Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        // User input field for the main description
-        TextFormField(
-          decoration: InputDecoration(
-            hintText: 'Tap to add a description',
-            border: InputBorder.none,
+    return Container(
+      constraints: BoxConstraints(minHeight: 100),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          TextFormField(
+            controller: _descriptionController,
+            decoration: InputDecoration(
+              hintText: 'Tap to add a description...',
+              border: InputBorder.none,
+            ),
+            maxLines: null,
+            onChanged: (value) {
+              List<String> newHashtags = _extractHashtags(value);
+              
+              if (newHashtags.length > MAX_HASHTAGS) {
+                // If exceeding limit, trim the text to remove the last hashtag
+                int lastHashIndex = value.lastIndexOf('#');
+                value = value.substring(0, lastHashIndex);
+                
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text('Maximum ${MAX_HASHTAGS} hashtags allowed'),
+                    duration: Duration(seconds: 2),
+                  ),
+                );
+                
+                // Update the controller to reflect the trimmed text
+                _descriptionController.value = TextEditingValue(
+                  text: value,
+                  selection: TextSelection.collapsed(offset: value.length),
+                );
+              }
+              
+              setState(() {
+                _userDescription = value;
+                _hashtags.clear();
+                _hashtags.addAll(_extractHashtags(value).take(MAX_HASHTAGS));
+                _updateDescription();
+              });
+            },
           ),
-          maxLines: null,
-          onChanged: (value) {
-            setState(() {
-              _userDescription = value;
-              _updateDescription();
-            });
-          },
-        ),
-        // Display activities with rich text
-        if (_activities.isNotEmpty) ...[
+          if (_activities.isNotEmpty) ...[
           SizedBox(height: 16),
           ..._activities.map((activity) {
             return Padding(
@@ -181,6 +247,41 @@ Widget _buildDescriptionField() {
     ),
   );
 }
+
+
+/* List<TextSpan> _buildTextSpans(String text) {
+  List<TextSpan> spans = [];
+  RegExp hashtagRegExp = RegExp(r'(#\w+)');
+  int lastIndex = 0;
+
+  for (Match match in hashtagRegExp.allMatches(text)) {
+    // Add text before hashtag
+    if (match.start > lastIndex) {
+      spans.add(TextSpan(
+        text: text.substring(lastIndex, match.start),
+        style: TextStyle(color: Colors.black),
+      ));
+    }
+    
+    // Add hashtag with color
+    spans.add(TextSpan(
+      text: match.group(0),
+      style: TextStyle(color: Colors.green),
+    ));
+    
+    lastIndex = match.end;
+  }
+
+  // Add remaining text after last hashtag
+  if (lastIndex < text.length) {
+    spans.add(TextSpan(
+      text: text.substring(lastIndex),
+      style: TextStyle(color: Colors.black),
+    ));
+  }
+
+  return spans;
+} */
 
 //previous version with the single activity button, new version under this includes all 3.
 /*   Widget _buildActivityButton() {
@@ -967,70 +1068,71 @@ Future<void> _getImages() async {
     print('Error selecting images: $e');
   }
 }
-Future<void> _createPost() async {
-  if (_formKey.currentState!.validate() && _images.isNotEmpty) {
-    setState(() {
-      _isLoading = true;
-    });
 
-    try {
-      List<String> imageUrls = await _uploadImages();
-      User? currentUser = FirebaseAuth.instance.currentUser;
-      DocumentSnapshot userDoc = await FirebaseFirestore.instance
-          .collection('users')
-          .doc(currentUser!.uid)
-          .get();
+ Future<void> _createPost() async {
+    if (_formKey.currentState!.validate() && _images.isNotEmpty) {
+      setState(() {
+        _isLoading = true;
+      });
 
-      String username = userDoc['username'];
+      try {
+        List<String> imageUrls = await _uploadImages();
+        User? currentUser = FirebaseAuth.instance.currentUser;
+        DocumentSnapshot userDoc = await FirebaseFirestore.instance
+            .collection('users')
+            .doc(currentUser!.uid)
+            .get();
 
-      // Format activities using only provided data
-// In _createPost method, update the formattedActivities mapping:
-List<Map<String, dynamic>> formattedActivities = _activities.map((activity) {
-  return {
-    'name': activity.name,
-    'description': activity.description,
-    'placeDescription': activity.placeDescription,
-    'location': activity.location,  // Add this line
-  };
-}).toList();
+        String username = userDoc['username'];
+
+        List<Map<String, dynamic>> formattedActivities = _activities.map((activity) {
+          return {
+            'name': activity.name,
+            'description': activity.description,
+            'placeDescription': activity.placeDescription,
+            'location': activity.location,
+          };
+        }).toList();
 
       // Create the post document with only necessary fields
-      Map<String, dynamic> postData = {
-        'userId': currentUser.uid,
-        'title': _title,
-        'description': _description,
-        'imageUrls': imageUrls,
-        'createdAt': FieldValue.serverTimestamp(),
-        'username': username,
-        'category': _selectedCategory,
-        'city': _selectedCity,
-        'likes': 0,
-        'activities': formattedActivities,
-      };
+        Map<String, dynamic> postData = {
+          'userId': currentUser.uid,
+          'title': _title,
+          'description': _description,
+          'hashtags': _hashtags, 
+          'imageUrls': imageUrls,
+          'createdAt': FieldValue.serverTimestamp(),
+          'username': username,
+          'category': _selectedCategory,
+          'city': _selectedCity,
+          'likes': 0,
+          'activities': formattedActivities,
+        };
 
-      await FirebaseFirestore.instance.collection('posts').add(postData);
+        await FirebaseFirestore.instance.collection('posts').add(postData);
 
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Post created successfully')),
+        );
+
+        Navigator.pushReplacementNamed(context, '/home');
+      } catch (e) {
+        print("Error creating post: $e");
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error creating post: $e')),
+        );
+      }
+
+      setState(() {
+        _isLoading = false;
+      });
+    } else if (_images.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Post created successfully')),
-      );
-
-      Navigator.pushReplacementNamed(context, '/home');
-    } catch (e) {
-      print("Error creating post: $e");
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error creating post: $e')),
+        SnackBar(content: Text('Please select at least one image')),
       );
     }
-
-    setState(() {
-      _isLoading = false;
-    });
-  } else if (_images.isEmpty) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('Please select at least one image')),
-    );
   }
-}
+
 
   Future<List<String>> _uploadImages() async {
     List<String> imageUrls = [];
@@ -1068,3 +1170,4 @@ class Activity {
     };
   }
 }
+
