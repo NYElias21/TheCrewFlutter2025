@@ -8,6 +8,8 @@ import 'package:flutter/services.dart';
 import 'dart:ui' as ui;
 import 'location_detail_sheet.dart';
 import 'package:google_place/google_place.dart';
+import 'package:flutter/gestures.dart';
+import 'hashtag_search_page.dart';
 
 class PostDetailPage extends StatefulWidget {
   final DocumentSnapshot post;
@@ -32,6 +34,7 @@ class _PostDetailPageState extends State<PostDetailPage> {
   List<Comment> comments = [];
   Comment? replyingTo;
   Map<String, bool> _expandedReplies = {};
+  Map<String, dynamic> uniqueActivities = {};
 
 @override
 void initState() {
@@ -951,7 +954,8 @@ Widget _buildPostDetails(String title, String description, String postType) {
   final data = widget.post.data() as Map<String, dynamic>;
   final activities = data['activities'] as List<dynamic>?;
 
-  final uniqueActivities = <String, dynamic>{};
+  // Initialize uniqueActivities
+  uniqueActivities = {};
   activities?.forEach((activity) {
     if (!uniqueActivities.containsKey(activity['name'])) {
       uniqueActivities[activity['name']] = activity;
@@ -968,9 +972,11 @@ Widget _buildPostDetails(String title, String description, String postType) {
           style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
         ),
         SizedBox(height: 8),
-        Text(
-          description.isNotEmpty ? description : 'No description available',
-          style: TextStyle(fontSize: 16),
+        RichText(
+          text: TextSpan(
+            children: _buildHashtagTextSpans(description, context),
+            style: TextStyle(fontSize: 16, color: Colors.black),
+          ),
         ),
         SizedBox(height: 16),
         if (activities != null && activities.isNotEmpty) ...[
@@ -1030,6 +1036,51 @@ Widget _buildPostDetails(String title, String description, String postType) {
     ),
   );
 }
+
+List<TextSpan> _buildHashtagTextSpans(String text, BuildContext context) {
+  List<TextSpan> spans = [];
+  RegExp hashtagRegExp = RegExp(r'#\w+');
+  int lastIndex = 0;
+
+  for (Match match in hashtagRegExp.allMatches(text)) {
+    if (match.start > lastIndex) {
+      spans.add(TextSpan(
+        text: text.substring(lastIndex, match.start),
+      ));
+    }
+    
+    final hashtag = text.substring(match.start, match.end);
+    spans.add(TextSpan(
+      text: hashtag,
+      style: TextStyle(
+        color: Color(0xFF0095F6),
+        fontWeight: FontWeight.w500,
+      ),
+      recognizer: TapGestureRecognizer()
+        ..onTap = () => _navigateToHashtagSearch(context, hashtag.substring(1)),
+    ));
+    
+    lastIndex = match.end;
+  }
+
+  if (lastIndex < text.length) {
+    spans.add(TextSpan(
+      text: text.substring(lastIndex),
+    ));
+  }
+
+  return spans;
+}
+
+void _navigateToHashtagSearch(BuildContext context, String hashtag) {
+  Navigator.push(
+    context,
+    MaterialPageRoute(
+      builder: (context) => HashtagSearchPage(hashtag: hashtag),
+    ),
+  );
+}
+
 
 Widget _buildOverviewMap() {
   final data = widget.post.data() as Map<String, dynamic>;
