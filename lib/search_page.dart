@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'dart:async';  // At the top of the file with other imports
+import 'dart:async';
+import 'post_detail_page.dart';
+
 
 class SeasonalPromotion {
   final String id;
@@ -424,63 +426,135 @@ Widget _buildLocalFavorites() {
   );
 }
 
-  Widget _buildHashtagGrid() {
-    // Replace this with Firestore query or real data
-    List<Map<String, String>> hashtagData = [
-      {'title': 'summertrips', 'views': '17.6M', 'imageUrl': 'https://via.placeholder.com/150'},
-      {'title': 'waterfalls', 'views': '7.2M', 'imageUrl': 'https://via.placeholder.com/150'},
-      {'title': 'fallfest', 'views': '14.3M', 'imageUrl': 'https://via.placeholder.com/150'},
-      {'title': 'october', 'views': '1.4M', 'imageUrl': 'https://via.placeholder.com/150'},
-    ];
+Widget _buildHashtagGrid() {
+  return StreamBuilder<QuerySnapshot>(
+    stream: FirebaseFirestore.instance
+        .collection('hashtags')
+        .orderBy('trendingScore', descending: true)
+        .limit(4)
+        .snapshots(),
+    builder: (context, snapshot) {
+      if (!snapshot.hasData) {
+        return Center(child: CircularProgressIndicator());
+      }
 
-    return Column(
-      children: hashtagData.map((data) {
-        return Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  Icon(Icons.tag, size: 24, color: Colors.grey),
-                  SizedBox(width: 8),
-                  Text(
-                    '#${data['title']}',
-                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-                  ),
-                  Spacer(),
-                  Text(
-                    '${data['views']} views',
-                    style: TextStyle(color: Colors.grey, fontSize: 14),
-                  ),
-                ],
-              ),
-              SizedBox(height: 8),
-              Container(
-                height: 120,
-                child: ListView.builder(
-                  scrollDirection: Axis.horizontal,
-                  itemCount: 5, // Sample count, adjust based on actual data
-                  itemBuilder: (context, index) {
-                    return Padding(
-                      padding: const EdgeInsets.only(right: 8.0),
-                      child: ClipRRect(
-                        borderRadius: BorderRadius.circular(8),
-                        child: Image.network(
-                          data['imageUrl']!,
-                          width: 120,
-                          height: 120,
-                          fit: BoxFit.cover,
-                        ),
-                      ),
-                    );
-                  },
+      if (snapshot.data!.docs.isEmpty) {
+        return Center(child: Text('No trending hashtags yet'));
+      }
+
+      return Column(
+        children: snapshot.data!.docs.map((doc) {
+          final data = doc.data() as Map<String, dynamic>;
+          final String hashtagName = data['name'] ?? '#${doc.id}';
+          final int postCount = data['postCount'] ?? 0;
+          
+          return Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Icon(Icons.tag, size: 24, color: Colors.grey),
+                    SizedBox(width: 8),
+                    Text(
+                      hashtagName,
+                      style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                    ),
+                    Spacer(),
+                    Text(
+                      '${_formatCount(postCount)} posts',
+                      style: TextStyle(color: Colors.grey, fontSize: 14),
+                    ),
+                  ],
                 ),
-              ),
-            ],
+                SizedBox(height: 8),
+                _buildHashtagPosts(hashtagName),
+              ],
+            ),
+          );
+        }).toList(),
+      );
+    },
+  );
+}
+
+Widget _buildHashtagPosts(String hashtag) {
+  return StreamBuilder<QuerySnapshot>(
+    stream: FirebaseFirestore.instance
+        .collection('posts')
+        .where('hashtags', arrayContains: hashtag)
+        .orderBy('createdAt', descending: true)
+        .limit(5)
+        .snapshots(),
+    builder: (context, snapshot) {
+      if (!snapshot.hasData) {
+        return Container(
+          height: 120,
+          child: Center(child: CircularProgressIndicator()),
+        );
+      }
+
+      if (snapshot.data!.docs.isEmpty) {
+        return Container(
+          height: 120,
+          child: Center(
+            child: Text('No posts with this hashtag yet'),
           ),
         );
-      }).toList(),
-    );
+      }
+
+      return Container(
+        height: 120,
+        child: ListView.builder(
+          scrollDirection: Axis.horizontal,
+          itemCount: snapshot.data!.docs.length,
+          itemBuilder: (context, index) {
+            final post = snapshot.data!.docs[index];
+            final data = post.data() as Map<String, dynamic>;
+            
+            return GestureDetector(
+              onTap: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => PostDetailPage(
+                      post: post,
+                    ),
+                  ),
+                );
+              },
+              child: Container(
+                width: 120,
+                margin: EdgeInsets.only(right: 8.0),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(8),
+                  child: Image.network(
+                    data['imageUrls'][0], // Get first image from the post
+                    fit: BoxFit.cover,
+                    errorBuilder: (context, error, stackTrace) {
+                      return Container(
+                        color: Colors.grey[300],
+                        child: Icon(Icons.error),
+                      );
+                    },
+                  ),
+                ),
+              ),
+            );
+          },
+        ),
+      );
+    },
+  );
+}
+
+String _formatCount(int count) {
+  if (count >= 1000000) {
+    return '${(count / 1000000).toStringAsFixed(1)}M';
+  } else if (count >= 1000) {
+    return '${(count / 1000).toStringAsFixed(1)}K';
   }
+  return count.toString();
+}
 }

@@ -46,12 +46,86 @@ class HashtagTextController extends TextEditingController {
   }
 }
 
+class HashtagService {
+  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+  
+  Future<void> updateHashtagMetrics(List<String> hashtags) async {
+    final batch = _firestore.batch();
+    final now = DateTime.now();
+    
+    for (String hashtag in hashtags) {
+      final hashtagRef = _firestore.collection('hashtags').doc(hashtag.substring(1)); // Remove # symbol
+      
+      try {
+        // Get the current hashtag document
+        final hashtagDoc = await hashtagRef.get();
+        
+        if (hashtagDoc.exists) {
+          // Update existing hashtag metrics
+          batch.update(hashtagRef, {
+            'postCount': FieldValue.increment(1),
+            'lastUsed': now,
+            'weeklyPostCount': FieldValue.increment(1),
+            'trendingScore': FieldValue.increment(1), // Basic scoring
+          });
+        } else {
+          // Create new hashtag document
+          batch.set(hashtagRef, {
+            'name': hashtag,
+            'postCount': 1,
+            'weeklyPostCount': 1,
+            'created': now,
+            'lastUsed': now,
+            'trendingScore': 1,
+          });
+        }
+      } catch (e) {
+        print('Error updating hashtag metrics: $e');
+      }
+    }
+    
+    // Commit all updates in a single batch
+    await batch.commit();
+  }
+  
+  // Function to decay trending scores periodically
+  Future<void> decayTrendingScores() async {
+    final now = DateTime.now();
+    final oneWeekAgo = now.subtract(Duration(days: 7));
+    
+    try {
+      // Get hashtags used in the last week
+      final querySnapshot = await _firestore
+          .collection('hashtags')
+          .where('lastUsed', isGreaterThan: oneWeekAgo)
+          .get();
+      
+      final batch = _firestore.batch();
+      
+      for (var doc in querySnapshot.docs) {
+        // Decay the trending score by 50%
+        final currentScore = doc.data()['trendingScore'] ?? 0;
+        batch.update(doc.reference, {
+          'trendingScore': currentScore * 0.5,
+          'weeklyPostCount': 0, // Reset weekly count
+        });
+      }
+      
+      await batch.commit();
+    } catch (e) {
+      print('Error decaying trending scores: $e');
+    }
+  }
+}
+
+
 class CreatePostPage extends StatefulWidget {
   @override
   _CreatePostPageState createState() => _CreatePostPageState();
 }
 
 class _CreatePostPageState extends State<CreatePostPage> {
+  final HashtagService _hashtagService = HashtagService();
   final _formKey = GlobalKey<FormState>();
   final ImagePicker _picker = ImagePicker();
   final TextEditingController _bottomSheetSearchController = TextEditingController();
@@ -1069,7 +1143,7 @@ Future<void> _getImages() async {
   }
 }
 
- Future<void> _createPost() async {
+Future<void> _createPost() async {
     if (_formKey.currentState!.validate() && _images.isNotEmpty) {
       setState(() {
         _isLoading = true;
@@ -1085,31 +1159,26 @@ Future<void> _getImages() async {
 
         String username = userDoc['username'];
 
-        List<Map<String, dynamic>> formattedActivities = _activities.map((activity) {
-          return {
-            'name': activity.name,
-            'description': activity.description,
-            'placeDescription': activity.placeDescription,
-            'location': activity.location,
-          };
-        }).toList();
-
-      // Create the post document with only necessary fields
+        // Create post document
         Map<String, dynamic> postData = {
           'userId': currentUser.uid,
           'title': _title,
           'description': _description,
-          'hashtags': _hashtags, 
+          'hashtags': _hashtags,
           'imageUrls': imageUrls,
           'createdAt': FieldValue.serverTimestamp(),
           'username': username,
           'category': _selectedCategory,
           'city': _selectedCity,
           'likes': 0,
-          'activities': formattedActivities,
+          'activities': _activities.map((a) => a.toMap()).toList(),
         };
 
+        // Add post to Firestore
         await FirebaseFirestore.instance.collection('posts').add(postData);
+        
+        // Update hashtag metrics
+        await _hashtagService.updateHashtagMetrics(_hashtags);
 
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Post created successfully')),
@@ -1132,7 +1201,6 @@ Future<void> _getImages() async {
       );
     }
   }
-
 
   Future<List<String>> _uploadImages() async {
     List<String> imageUrls = [];
