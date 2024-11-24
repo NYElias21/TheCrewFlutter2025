@@ -10,6 +10,8 @@ import 'location_detail_sheet.dart';
 import 'package:google_place/google_place.dart';
 import 'package:flutter/gestures.dart';
 import 'hashtag_search_page.dart';
+import 'services/trending_posts.dart';
+
 
 class PostDetailPage extends StatefulWidget {
   final DocumentSnapshot post;
@@ -35,6 +37,7 @@ class _PostDetailPageState extends State<PostDetailPage> {
   Comment? replyingTo;
   Map<String, bool> _expandedReplies = {};
   Map<String, dynamic> uniqueActivities = {};
+  final TrendingPostsService _trendingService = TrendingPostsService();
 
 @override
 void initState() {
@@ -48,6 +51,7 @@ void initState() {
   _checkIfFollowing();
   _loadLikedAndSavedPosts();
   _loadComments();
+  _trackView();
 }
 
   @override
@@ -70,6 +74,15 @@ void _showPlaceDetails(BuildContext context, Map<String, dynamic> activity) {
     ),
   );
 }
+
+Future<void> _trackView() async {
+    try {
+      await _trendingService.incrementEngagement(widget.post.id, 'views');
+    } catch (e) {
+      print('Error tracking view: $e');
+    }
+  }
+
 
   Future<void> _checkIfFollowing() async {
     DocumentSnapshot userDoc = await FirebaseFirestore.instance
@@ -133,37 +146,33 @@ Future<void> _loadLikedAndSavedPosts() async {
     return _savedPosts.containsKey(postId);
   }
 
-  Future<void> _toggleLike(String postId) async {
-    DocumentReference userRef = FirebaseFirestore.instance.collection('users').doc(currentUserId);
-    DocumentReference postRef = FirebaseFirestore.instance.collection('posts').doc(postId);
+Future<void> _toggleLike(String postId) async {
+  DocumentReference userRef = FirebaseFirestore.instance.collection('users').doc(currentUserId);
+  DocumentReference postRef = FirebaseFirestore.instance.collection('posts').doc(postId);
 
-    bool liked = _likedPosts.containsKey(postId);
-    if (liked) {
-      _likedPosts.remove(postId);
-      await userRef.update({
-        'likedPosts.$postId': FieldValue.delete()
-      });
-      await postRef.update({
-        'likes': FieldValue.increment(-1)
-      });
-      setState(() {
-        likes--;
-      });
-    } else {
-      _likedPosts[postId] = Timestamp.now();
-      await userRef.update({
-        'likedPosts.$postId': FieldValue.serverTimestamp()
-      });
-      await postRef.update({
-        'likes': FieldValue.increment(1)
-      });
-      setState(() {
-        likes++;
-      });
-    }
-
-    setState(() {});
+  bool liked = _likedPosts.containsKey(postId);
+  if (liked) {
+    _likedPosts.remove(postId);
+    await userRef.update({
+      'likedPosts.$postId': FieldValue.delete()
+    });
+    await _trendingService.incrementEngagement(postId, 'likes', increment: false);
+    setState(() {
+      likes--;
+    });
+  } else {
+    _likedPosts[postId] = Timestamp.now();
+    await userRef.update({
+      'likedPosts.$postId': FieldValue.serverTimestamp()
+    });
+    await _trendingService.incrementEngagement(postId, 'likes', increment: true);
+    setState(() {
+      likes++;
+    });
   }
+
+  setState(() {});
+}
 
   Future<void> _toggleSave(String postId) async {
     DocumentReference userRef = FirebaseFirestore.instance.collection('users').doc(currentUserId);
@@ -229,9 +238,10 @@ Future<void> _loadLikedAndSavedPosts() async {
     );
   }
 
-void _sharePost() {
+Future<void> _sharePost() async {
   String caption = '';
   bool isGroupActivity = false;
+  await _trendingService.incrementEngagement(widget.post.id, 'shares');
 
   showModalBottomSheet(
     context: context,
@@ -599,7 +609,7 @@ Future<void> _loadComments() async {
   });
 }
 
-  Future<void> _addComment() async {
+Future<void> _addComment() async {
     if (_commentController.text.isNotEmpty) {
       DocumentReference commentRef = await FirebaseFirestore.instance
           .collection('posts')
@@ -611,6 +621,9 @@ Future<void> _loadComments() async {
         'text': _commentController.text,
         'timestamp': FieldValue.serverTimestamp(),
       });
+
+      // Track comment engagement
+      await _trendingService.incrementEngagement(widget.post.id, 'comments');
 
       DocumentSnapshot commentDoc = await commentRef.get();
       setState(() {

@@ -8,6 +8,7 @@ import 'package:google_place/google_place.dart';
 import 'package:flutter/gestures.dart';
 import 'photo_editor_page.dart';
 import 'custom_photo_selector.dart';
+import 'services/trending_posts.dart';
 
 // Add this class at the top level of the file, before CreatePostPage class
 class HashtagTextController extends TextEditingController {
@@ -1158,8 +1159,9 @@ Future<void> _createPost() async {
             .get();
 
         String username = userDoc['username'];
+        String userPhotoURL = userDoc['photoURL'] ?? ''; // Changed from photoUrl to photoURL
 
-        // Create post document
+        // Create post document with trending fields
         Map<String, dynamic> postData = {
           'userId': currentUser.uid,
           'title': _title,
@@ -1168,17 +1170,29 @@ Future<void> _createPost() async {
           'imageUrls': imageUrls,
           'createdAt': FieldValue.serverTimestamp(),
           'username': username,
+          'userPhotoURL': userPhotoURL, // Changed from userPhotoUrl to userPhotoURL
           'category': _selectedCategory,
           'city': _selectedCity,
+          // Add trending-related fields
           'likes': 0,
+          'comments': 0,
+          'shares': 0,
+          'views': 0,
+          'trendingScore': 0.0,
+          'lastTrendingUpdate': FieldValue.serverTimestamp(),
           'activities': _activities.map((a) => a.toMap()).toList(),
+          'location': _selectedCity,
         };
 
         // Add post to Firestore
-        await FirebaseFirestore.instance.collection('posts').add(postData);
+        DocumentReference postRef = await FirebaseFirestore.instance.collection('posts').add(postData);
         
         // Update hashtag metrics
         await _hashtagService.updateHashtagMetrics(_hashtags);
+
+        // Initialize trending score
+        final trendingService = TrendingPostsService();
+        await trendingService.updateTrendingScore(postRef.id);
 
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Post created successfully')),

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'dart:async';
 import 'post_detail_page.dart';
+import 'services/trending_posts.dart';
 
 
 class SeasonalPromotion {
@@ -54,6 +55,71 @@ class SearchPage extends StatefulWidget {
   _SearchPageState createState() => _SearchPageState();
 }
 
+Future<void> createSampleTrendingPosts() async {
+  final FirebaseFirestore firestore = FirebaseFirestore.instance;
+  
+  final List<Map<String, dynamic>> samplePosts = [
+    {
+      'title': 'Amazing Sunset Hike',
+      'subtitle': 'Best views in Charlotte',
+      'description': 'Found this incredible hiking spot with amazing city views!',
+      'username': 'adventurer123',
+      'userPhotoUrl': 'https://picsum.photos/200',
+      'imageUrls': ['https://picsum.photos/800/600'],
+      'location': 'Charlotte',
+      'likes': 150,
+      'comments': 45,
+      'shares': 20,
+      'views': 500,
+      'createdAt': Timestamp.now(),
+      'trendingScore': 215.0,
+      'lastTrendingUpdate': FieldValue.serverTimestamp(),
+    },
+    {
+      'title': 'Hidden Coffee Gem',
+      'subtitle': 'Must try their cold brew!',
+      'description': 'Just discovered this cozy coffee shop in NoDa',
+      'username': 'coffeelover',
+      'userPhotoUrl': 'https://picsum.photos/201',
+      'imageUrls': ['https://picsum.photos/800/601'],
+      'location': 'NoDa, Charlotte',
+      'likes': 200,
+      'comments': 30,
+      'shares': 15,
+      'views': 600,
+      'createdAt': Timestamp.now(),
+      'trendingScore': 245.0,
+      'lastTrendingUpdate': FieldValue.serverTimestamp(),
+    },
+    {
+      'title': 'Rooftop Vibes',
+      'subtitle': 'Best Friday night spot',
+      'description': 'Amazing new rooftop bar with skyline views',
+      'username': 'nightlife_explorer',
+      'userPhotoUrl': 'https://picsum.photos/202',
+      'imageUrls': ['https://picsum.photos/800/602'],
+      'location': 'Uptown Charlotte',
+      'likes': 300,
+      'comments': 50,
+      'shares': 25,
+      'views': 800,
+      'createdAt': Timestamp.now(),
+      'trendingScore': 375.0,
+      'lastTrendingUpdate': FieldValue.serverTimestamp(),
+    }
+  ];
+
+  // Add posts to Firestore
+  for (var post in samplePosts) {
+    try {
+      await firestore.collection('posts').add(post);
+      print('Added sample post: ${post['title']}');
+    } catch (e) {
+      print('Error adding post: $e');
+    }
+  }
+}
+
 class _SearchPageState extends State<SearchPage> {
   TextEditingController _searchController = TextEditingController();
   final PageController _pageController = PageController();
@@ -63,6 +129,8 @@ class _SearchPageState extends State<SearchPage> {
  @override
 void initState() {
   super.initState();
+    // Add this line temporarily to create sample posts
+ // createSampleTrendingPosts();
   // Start auto-scroll timer
   _autoScrollTimer = Timer.periodic(Duration(seconds: 5), (timer) {
     if (_pageController.hasClients) {
@@ -119,48 +187,255 @@ void initState() {
     );
   }
 
-  Widget _buildSearchResults() {
-    String query = _searchController.text.trim();
+Widget _buildSearchResults() {
+  String query = _searchController.text.trim();
 
-    return SingleChildScrollView(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          _buildPromotionalBanner(),
-          Column(
+  return SingleChildScrollView(
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _buildPromotionalBanner(), // Keep this
+        
+        // Trending Section
+        Padding(
+          padding: const EdgeInsets.all(16.0),
+          child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Local favorites',
+              Text(
+                'Trending',
+                style: TextStyle(
+                  fontSize: 24,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              Text(
+                'What Locals are loving rn',
+                style: TextStyle(
+                  fontSize: 16,
+                  color: Colors.grey[600],
+                ),
+              ),
+            ],
+          ),
+        ),
+        _buildTrendingPosts(),
+        
+        // Collections Section
+        Padding(
+          padding: const EdgeInsets.all(16.0),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Collections',
+                style: TextStyle(
+                  fontSize: 24,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              Text(
+                'Your recent collections',
+                style: TextStyle(
+                  fontSize: 16,
+                  color: Colors.grey[600],
+                ),
+              ),
+            ],
+          ),
+        ),
+        _buildCollections(),
+      ],
+    ),
+  );
+}
+
+Widget _buildTrendingPosts() {
+  final trendingService = TrendingPostsService();
+
+  return StreamBuilder<List<TrendingPost>>(
+    stream: trendingService.getTrendingPosts(),
+    builder: (context, snapshot) {
+      if (!snapshot.hasData) {
+        return Center(child: CircularProgressIndicator());
+      }
+
+      return Container(
+        height: 460, // Increased height to accommodate all content
+        child: ListView.builder(
+          scrollDirection: Axis.horizontal,
+          itemCount: snapshot.data!.length,
+          padding: EdgeInsets.symmetric(horizontal: 16),
+          itemBuilder: (context, index) {
+            final post = snapshot.data![index];
+            
+            return Container(
+              width: MediaQuery.of(context).size.width * 0.8,
+              margin: EdgeInsets.only(right: 16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min, // Added this
+                children: [
+                  // Trending rank indicator
+                  Container(
+                    width: 40,
+                    height: 40,
+                    alignment: Alignment.center,
+                    decoration: BoxDecoration(
+                      color: Colors.black,
+                      shape: BoxShape.circle,
+                    ),
+                    child: Text(
+                      '${index + 1}',
                       style: TextStyle(
                         fontSize: 24,
                         fontWeight: FontWeight.bold,
+                        color: Colors.white,
                       ),
                     ),
-                    Text(
-                      'Based on thousands of local votes',
-                      style: TextStyle(
-                        fontSize: 16,
-                        color: Colors.grey[600],
+                  ),
+                  SizedBox(height: 8),
+                  // Post image
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(12),
+                    child: AspectRatio(
+                      aspectRatio: 4/3,
+                      child: Image.network(
+                        post.imageUrls[0],
+                        fit: BoxFit.cover,
                       ),
                     ),
-                  ],
-                ),
+                  ),
+                  SizedBox(height: 12),
+                  // Engagement metrics
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.favorite, size: 16, color: Colors.red),
+                      SizedBox(width: 4),
+                      Text('${post.likes}'),
+                      SizedBox(width: 16),
+                      Icon(Icons.comment, size: 16),
+                      SizedBox(width: 4),
+                      Text('${post.comments}'),
+                      SizedBox(width: 16),
+                      Icon(Icons.remove_red_eye, size: 16),
+                      SizedBox(width: 4),
+                      Text('${post.views}'),
+                    ],
+                  ),
+                  SizedBox(height: 12),
+                  // User info
+                  Row(
+                    children: [
+                      CircleAvatar(
+                        radius: 16,
+                        backgroundImage: NetworkImage(post.userPhotoUrl),
+                      ),
+                      SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          post.username,
+                          style: TextStyle(fontWeight: FontWeight.bold),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    ],
+                  ),
+                  SizedBox(height: 8),
+                  // Post title
+                  Text(
+                    post.title,
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  // Location
+                  Text(
+                    post.location,
+                    style: TextStyle(color: Colors.grey[600]),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ],
               ),
-              _buildLocalFavorites(),
-            ],
+            );
+          },
+        ),
+      );
+    },
+  );
+}
+
+Widget _buildCollections() {
+  return StreamBuilder<QuerySnapshot>(
+    stream: FirebaseFirestore.instance
+        .collection('collections')
+        .orderBy('createdAt', descending: true)
+        .snapshots(),
+    builder: (context, snapshot) {
+      if (!snapshot.hasData) {
+        return Center(child: CircularProgressIndicator());
+      }
+
+      return Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16.0),
+        child: GridView.builder(
+          shrinkWrap: true,
+          physics: NeverScrollableScrollPhysics(),
+          gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+            crossAxisCount: 2,
+            crossAxisSpacing: 16,
+            mainAxisSpacing: 16,
+            childAspectRatio: 2.5,
           ),
-          _buildSectionTitle('Trending Hashtags'),
-          _buildHashtagGrid(),
-        ],
-      ),
-    );
-  }
+          itemCount: snapshot.data!.docs.length,
+          itemBuilder: (context, index) {
+            final collection = snapshot.data!.docs[index];
+            final data = collection.data() as Map<String, dynamic>;
+            
+            return Container(
+              decoration: BoxDecoration(
+                color: Colors.grey[200],
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Row(
+                children: [
+                  ClipRRect(
+                    borderRadius: BorderRadius.only(
+                      topLeft: Radius.circular(12),
+                      bottomLeft: Radius.circular(12),
+                    ),
+                    child: Image.network(
+                      data['coverImage'],
+                      width: 70,
+                      height: double.infinity,
+                      fit: BoxFit.cover,
+                    ),
+                  ),
+                  Expanded(
+                    child: Padding(
+                      padding: const EdgeInsets.all(8.0),
+                      child: Text(
+                        data['title'],
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            );
+          },
+        ),
+      );
+    },
+  );
+}
 
 Widget _buildPromotionalBanner() {
   return StreamBuilder<QuerySnapshot>(
