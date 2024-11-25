@@ -92,7 +92,7 @@ class _SocialFeedPageState extends State<SocialFeedPage> with SingleTickerProvid
           stream: FirebaseFirestore.instance
               .collection('social_posts')
               .where('sharedBy', whereIn: mutualFriends)
-              .where('isCompleted', isEqualTo: false) // Add this condition
+              .where('isCompleted', isEqualTo: false)
               .orderBy('timestamp', descending: true)
               .snapshots(),
           builder: (context, snapshot) {
@@ -141,7 +141,7 @@ class _SocialFeedPageState extends State<SocialFeedPage> with SingleTickerProvid
           stream: FirebaseFirestore.instance
               .collection('social_posts')
               .where('sharedBy', whereIn: mutualFriends)
-              .where('isCompleted', isEqualTo: true) // Add this condition
+              .where('isCompleted', isEqualTo: true)
               .orderBy('timestamp', descending: true)
               .snapshots(),
           builder: (context, snapshot) {
@@ -196,6 +196,83 @@ class SocialPostCard extends StatelessWidget {
 
   SocialPostCard({required this.post});
 
+Future<void> _showDeleteConfirmation(BuildContext context, String groupId) async {
+  return showDialog(
+    context: context,
+    builder: (BuildContext context) {
+      return AlertDialog(
+        title: Text('Delete Group'),
+        content: Text('Are you sure you want to delete this group? This action cannot be undone.'),
+        actions: [
+          TextButton(
+            child: Text('Cancel'),
+            onPressed: () => Navigator.pop(context),
+          ),
+          TextButton(
+            child: Text('Delete', style: TextStyle(color: Colors.red)),
+            onPressed: () async {
+              try {
+                // Start a batch write
+                WriteBatch batch = FirebaseFirestore.instance.batch();
+
+                // Delete the group document
+                DocumentReference groupRef = FirebaseFirestore.instance.collection('groups').doc(groupId);
+                batch.delete(groupRef);
+
+                // Delete the social post
+                batch.delete(post.reference);
+
+                // Delete all chat messages associated with this group
+                QuerySnapshot chatMessages = await FirebaseFirestore.instance
+                    .collection('groups')
+                    .doc(groupId)
+                    .collection('messages')
+                    .get();
+                
+                for (var message in chatMessages.docs) {
+                  batch.delete(message.reference);
+                }
+
+                // Delete all notifications related to this group
+                QuerySnapshot notifications = await FirebaseFirestore.instance
+                    .collection('notifications')
+                    .where('groupId', isEqualTo: groupId)
+                    .get();
+
+                for (var notification in notifications.docs) {
+                  batch.delete(notification.reference);
+                }
+
+                // Delete all group activities
+                QuerySnapshot activities = await FirebaseFirestore.instance
+                    .collection('social_posts')
+                    .where('groupId', isEqualTo: groupId)
+                    .get();
+
+                for (var activity in activities.docs) {
+                  batch.delete(activity.reference);
+                }
+
+                // Commit the batch
+                await batch.commit();
+                
+                Navigator.pop(context); // Close dialog
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text('Group deleted successfully')),
+                );
+              } catch (e) {
+                print('Error deleting group: $e');
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text('Failed to delete group. Please try again.')),
+                );
+              }
+            },
+          ),
+        ],
+      );
+    },
+  );
+}
   @override
   Widget build(BuildContext context) {
     Map<String, dynamic> data = post.data() as Map<String, dynamic>;
@@ -252,12 +329,33 @@ class SocialPostCard extends StatelessWidget {
                 child: Text(username, style: TextStyle(fontWeight: FontWeight.bold)),
               ),
               subtitle: Text(_formatTimestamp(timestamp)),
-              trailing: IconButton(
-                icon: Icon(Icons.more_horiz),
-                onPressed: () {
-                  // TODO: Implement post options menu
-                },
-              ),
+              trailing: userId == currentUserId
+                  ? IconButton(
+                      icon: Icon(Icons.more_horiz),
+                      onPressed: () {
+                        showModalBottomSheet(
+                          context: context,
+                          builder: (BuildContext context) {
+                            return SafeArea(
+                              child: Column(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  ListTile(
+                                    leading: Icon(Icons.delete, color: Colors.red),
+                                    title: Text('Delete Group', style: TextStyle(color: Colors.red)),
+                                    onTap: () {
+                                      Navigator.pop(context);
+                                      _showDeleteConfirmation(context, post.id);
+                                    },
+                                  ),
+                                ],
+                              ),
+                            );
+                          },
+                        );
+                      },
+                    )
+                  : null,
             );
           },
         ),
@@ -271,24 +369,20 @@ class SocialPostCard extends StatelessWidget {
             padding: EdgeInsets.symmetric(horizontal: 16),
             child: _buildImageGrid(imageUrls),
           ),
-        // New section: Group members and button
         Padding(
           padding: EdgeInsets.all(16),
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [
-              // Group members
               if (isGroupActivity)
                 Expanded(
                   child: _buildGroupMembersSection(context, groupMembers),
                 ),
-              // Button
               _buildActionButton(context, isGroupActivity, groupMembers, userId),
             ],
           ),
         ),
-        // Reactions
         Padding(
           padding: EdgeInsets.symmetric(horizontal: 16),
           child: _buildReactionsSection(context, reactions),
