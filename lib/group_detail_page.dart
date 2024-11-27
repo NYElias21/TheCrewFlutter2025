@@ -10,6 +10,8 @@ import 'dart:io';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:google_place/google_place.dart';
 import 'poll_components.dart';
+import 'package:flutter/cupertino.dart';
+import 'package:intl/intl.dart';
 
 class GroupDetailPage extends StatefulWidget {
   final String groupId;
@@ -18,6 +20,79 @@ class GroupDetailPage extends StatefulWidget {
 
   @override
   _GroupDetailPageState createState() => _GroupDetailPageState();
+}
+
+// Move this class to the top level of the file
+class CupertinoDateTextBox extends StatelessWidget {
+  final DateTime initialValue;
+  final Function(DateTime?) onDateChange;
+  final String? hintText;
+
+  const CupertinoDateTextBox({
+    Key? key,
+    required this.initialValue,
+    required this.onDateChange,
+    this.hintText,
+  }) : super(key: key);
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: () async {
+        DateTime? pickedDate = await showModalBottomSheet<DateTime>(
+          context: context,
+          builder: (context) {
+            DateTime tempPickedDate = initialValue;
+            return Container(
+              height: 300,
+              color: Colors.white,
+              child: Column(
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      TextButton(
+                        onPressed: () => Navigator.pop(context),
+                        child: Text('Cancel'),
+                      ),
+                      TextButton(
+                        onPressed: () => Navigator.pop(context, tempPickedDate),
+                        child: Text('Done'),
+                      ),
+                    ],
+                  ),
+                  Expanded(
+                    child: CupertinoDatePicker(
+                      mode: CupertinoDatePickerMode.dateAndTime,
+                      initialDateTime: initialValue,
+                      onDateTimeChanged: (DateTime dateTime) {
+                        tempPickedDate = dateTime;
+                      },
+                    ),
+                  ),
+                ],
+              ),
+            );
+          },
+        );
+        
+        if (pickedDate != null) {
+          onDateChange(pickedDate);
+        }
+      },
+      child: Padding(
+        padding: EdgeInsets.all(16),
+        child: Row(
+          children: [
+            Text(
+              DateFormat('E, MMM d @ h:mm a').format(initialValue),
+              style: TextStyle(fontSize: 16),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 }
 
 
@@ -333,6 +408,153 @@ void _editPlan(Map<String, dynamic> groupData) {
   }
 
 
+void _showNotesDialog(BuildContext context, int index, Map<String, dynamic> activity) {
+  DateTime initialDate = activity['dateTime'] != null 
+      ? DateTime.parse(activity['dateTime'])
+      : DateTime.now();
+  TextEditingController notesController = TextEditingController(text: activity['notes'] ?? '');
+  
+  showModalBottomSheet(
+    context: context,
+    isScrollControlled: true,
+    backgroundColor: Colors.transparent,
+    builder: (context) => Container(
+      padding: EdgeInsets.only(
+        bottom: MediaQuery.of(context).viewInsets.bottom,
+      ),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.vertical(top: Radius.circular(30)),
+      ),
+      child: Padding(
+        padding: EdgeInsets.symmetric(horizontal: 20),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            SizedBox(height: 20),
+            Text(
+              'Make a note',
+              style: TextStyle(
+                fontSize: 28,
+                fontWeight: FontWeight.bold,
+                color: Colors.black,
+              ),
+              textAlign: TextAlign.center,
+            ),
+            SizedBox(height: 8),
+            Text(
+              'Let your friends know the details.',
+              style: TextStyle(
+                fontSize: 16,
+                color: Colors.grey[600],
+              ),
+              textAlign: TextAlign.center,
+            ),
+            SizedBox(height: 24),
+            Container(
+              padding: EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: Colors.grey[100],
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: Colors.grey[300]!),
+              ),
+              child: CupertinoDateTextBox(
+                initialValue: initialDate,
+                onDateChange: (DateTime? date) {
+                  if (date != null) {
+                    initialDate = date;
+                  }
+                },
+                hintText: 'Select date and time',
+              ),
+            ),
+            SizedBox(height: 16),
+            Container(
+              padding: EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: Colors.grey[100],
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: Colors.grey[300]!),
+              ),
+              child: TextField(
+                controller: notesController,
+                decoration: InputDecoration(
+                  hintText: 'Add notes...',
+                  border: InputBorder.none,
+                  isDense: true,
+                  contentPadding: EdgeInsets.zero,
+                ),
+                maxLines: 3,
+              ),
+            ),
+            SizedBox(height: 24),
+            Row(
+              children: [
+                Expanded(
+                  child: TextButton(
+                    child: Text(
+                      'Cancel',
+                      style: TextStyle(
+                        color: Colors.black,
+                        fontSize: 17,
+                      ),
+                    ),
+                    style: TextButton.styleFrom(
+                      padding: EdgeInsets.symmetric(vertical: 16),
+                      side: BorderSide(color: Colors.grey[300]!),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
+                    onPressed: () => Navigator.pop(context),
+                  ),
+                ),
+                SizedBox(width: 16),
+                Expanded(
+                  child: ElevatedButton(
+                    child: Text(
+                      'Save',
+                      style: TextStyle(
+                        color: Colors.black,
+                        fontSize: 17,
+                      ),
+                    ),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Color(0xFFFFC107),
+                      elevation: 0,
+                      padding: EdgeInsets.symmetric(vertical: 16),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
+                    onPressed: () async {
+                      await FirebaseFirestore.instance
+                          .collection('groups')
+                          .doc(widget.groupId)
+                          .get()
+                          .then((doc) {
+                        List<dynamic> activities = List.from(doc.data()!['activities']);
+                        activities[index] = {
+                          ...activities[index],
+                          'notes': notesController.text.trim(),
+                          'dateTime': initialDate.toIso8601String(),
+                        };
+                        doc.reference.update({'activities': activities});
+                      });
+                      Navigator.pop(context);
+                    },
+                  ),
+                ),
+              ],
+            ),
+            SizedBox(height: 20),
+          ],
+        ),
+      ),
+    ),
+  );
+}
   void _deletePlan() {
     showDialog(
       context: context,
@@ -595,72 +817,159 @@ Widget _buildDetailsTab(Map<String, dynamic> groupData) {
             ],
           ),
         ),
-      ...activities.asMap().entries.map((entry) {
-        int index = entry.key;
-        Map<String, dynamic> activity = entry.value;
-        return Card(
-          elevation: 0,
-          margin: EdgeInsets.only(bottom: 12),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
-            side: BorderSide(color: Colors.grey[200]!, width: 1),
-          ),
-          child: ListTile(
-            contentPadding: EdgeInsets.all(16),
-            title: Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    activity['name'] ?? 'Unnamed Activity',
-                    style: TextStyle(
-                      fontWeight: FontWeight.w600,
-                      fontSize: 16,
-                    ),
+...activities.asMap().entries.map((entry) {
+  int index = entry.key;
+  Map<String, dynamic> activity = entry.value;
+  List<String> imageUrls = List<String>.from(groupData['imageUrls'] ?? []);
+  String? imageUrl = index < imageUrls.length ? imageUrls[index] : null;
+  
+  // Parse the datetime
+  DateTime? activityDateTime;
+  if (activity['dateTime'] != null) {
+    activityDateTime = DateTime.parse(activity['dateTime']);
+  }
+  String timeDisplay = activityDateTime != null 
+      ? DateFormat('MMM d, yyyy h:mm a').format(activityDateTime)
+      : '[set time/date]';
+
+  String notes = activity['notes'] ?? '[add notes]';
+  
+  return Card(
+    elevation: 0,
+    margin: EdgeInsets.only(bottom: 12),
+    shape: RoundedRectangleBorder(
+      borderRadius: BorderRadius.circular(12),
+      side: BorderSide(color: Colors.grey[200]!, width: 1),
+    ),
+    child: Padding(
+      padding: EdgeInsets.all(16),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Left side - Image (unchanged)
+          ClipRRect(
+            borderRadius: BorderRadius.circular(8),
+            child: imageUrl != null
+              ? Image.network(
+                  imageUrl,
+                  width: 80,
+                  height: 80,
+                  fit: BoxFit.cover,
+                  errorBuilder: (context, error, stackTrace) => Container(
+                    width: 80,
+                    height: 80,
+                    color: Colors.grey[200],
+                    child: Icon(Icons.error, color: Colors.grey),
                   ),
+                )
+              : Container(
+                  width: 80,
+                  height: 80,
+                  color: Colors.grey[200],
+                  child: Icon(Icons.image, color: Colors.grey),
                 ),
-                IconButton(
-                  icon: Icon(Icons.edit_outlined, size: 20, color: Colors.grey[600]),
-                  constraints: BoxConstraints(minWidth: 40),
-                  padding: EdgeInsets.zero,
-                  onPressed: () => _editActivity(index, activity),
-                ),
-              ],
-            ),
-            subtitle: Column(
+          ),
+          SizedBox(width: 16),
+          // Right side - Content
+          Expanded(
+            child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                SizedBox(height: 8),
-                Text(
-                  activity['description'] ?? 'No description',
-                  style: TextStyle(
-                    color: Colors.grey[600],
-                    fontSize: 14,
-                    height: 1.4,
-                  ),
-                ),
-                if (activity['placeDescription'] != null) ...[
-                  SizedBox(height: 8),
-                  Row(
-                    children: [
-                      Icon(Icons.location_on_outlined, size: 16, color: Colors.grey[600]),
-                      SizedBox(width: 4),
-                      Expanded(
-                        child: Text(
-                          activity['placeDescription'],
-                          style: TextStyle(
-                            color: Colors.grey[600],
-                            fontSize: 12,
-                          ),
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        activity['name'] ?? '[title]',
+                        style: TextStyle(
+                          fontWeight: FontWeight.w600,
+                          fontSize: 16,
                         ),
                       ),
-                    ],
-                  ),
-                ],
+                    ),
+                    IconButton(
+                      icon: Icon(Icons.edit_outlined, size: 20, color: Colors.grey[600]),
+                      constraints: BoxConstraints(minWidth: 40),
+                      padding: EdgeInsets.zero,
+                      onPressed: () => _editActivity(index, activity),
+                    ),
+                  ],
+                ),
+InkWell(
+  onTap: () => _showNotesDialog(context, index, activity),
+  child: Padding(
+    padding: EdgeInsets.symmetric(vertical: 4),
+    child: Row(
+      children: [
+        Icon(Icons.access_time, size: 16, color: Colors.grey[600]),
+        SizedBox(width: 4),
+        Text(
+          activity['dateTime'] != null 
+              ? DateFormat('MMM d, yyyy h:mm a').format(DateTime.parse(activity['dateTime']))
+              : '[set time/date]',
+          style: TextStyle(
+            color: activity['dateTime'] != null ? Colors.black87 : Colors.grey[600],
+            fontSize: 14,
+          ),
+        ),
+      ],
+    ),
+  ),
+),
+InkWell(
+  onTap: () => _showNotesDialog(context, index, activity),
+  child: Padding(
+    padding: EdgeInsets.symmetric(vertical: 4),
+    child: Row(
+      children: [
+        Icon(Icons.note_add_outlined, size: 16, color: Colors.grey[600]),
+        SizedBox(width: 4),
+        Expanded(
+          child: Text(
+            activity['notes'] ?? '[add notes]',
+            style: TextStyle(
+              color: activity['notes'] != null ? Colors.black87 : Colors.grey[600],
+              fontSize: 14,
+            ),
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+          ),
+        ),
+      ],
+    ),
+  ),
+),
+                SizedBox(height: 8),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                  children: [
+                    Column(
+                      children: [
+                        Icon(Icons.thumb_down, color: Colors.grey[400]),
+                        Text('Nope', style: TextStyle(fontSize: 12)),
+                      ],
+                    ),
+                    Column(
+                      children: [
+                        Icon(Icons.remove_red_eye, color: Colors.grey[400]),
+                        Text('Maybe', style: TextStyle(fontSize: 12)),
+                      ],
+                    ),
+                    Column(
+                      children: [
+                        Icon(Icons.favorite, color: Colors.grey[400]),
+                        Text('Love it!', style: TextStyle(fontSize: 12)),
+                      ],
+                    ),
+                  ],
+                ),
               ],
             ),
           ),
-        );
-      }).toList(),
+        ],
+      ),
+    ),
+  );
+}).toList(),
       
       SizedBox(height: 16), // Bottom padding
     ],
@@ -2287,15 +2596,41 @@ class ActivityBottomSheet extends StatefulWidget {
 class _ActivityBottomSheetState extends State<ActivityBottomSheet> {
   final TextEditingController _searchController = TextEditingController();
   final TextEditingController _descriptionController = TextEditingController();
+  final TextEditingController _notesController = TextEditingController();
+  DateTime? _selectedDate;
+  TimeOfDay? _selectedTime;
   List<AutocompletePrediction> _predictions = [];
   bool _isDescriptionMode = false;
   AutocompletePrediction? _selectedPrediction;
   String? _selectedAddress;
 
+  Future<void> _selectDate(BuildContext context) async {
+    final DateTime? picked = await showDatePicker(
+      context: context,
+      initialDate: _selectedDate ?? DateTime.now(),
+      firstDate: DateTime.now(),
+      lastDate: DateTime.now().add(Duration(days: 365)),
+    );
+    if (picked != null && picked != _selectedDate) {
+      setState(() => _selectedDate = picked);
+    }
+  }
+
+  Future<void> _selectTime(BuildContext context) async {
+    final TimeOfDay? picked = await showTimePicker(
+      context: context,
+      initialTime: _selectedTime ?? TimeOfDay.now(),
+    );
+    if (picked != null && picked != _selectedTime) {
+      setState(() => _selectedTime = picked);
+    }
+  }
+
   @override
   void dispose() {
     _searchController.dispose();
     _descriptionController.dispose();
+    _notesController.dispose();
     super.dispose();
   }
 
@@ -2313,7 +2648,6 @@ class _ActivityBottomSheetState extends State<ActivityBottomSheet> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Drag Handle
             Center(
               child: Container(
                 margin: EdgeInsets.only(top: 12),
@@ -2325,8 +2659,6 @@ class _ActivityBottomSheetState extends State<ActivityBottomSheet> {
                 ),
               ),
             ),
-
-            // Header
             Padding(
               padding: const EdgeInsets.all(16.0),
               child: Row(
@@ -2334,17 +2666,11 @@ class _ActivityBottomSheetState extends State<ActivityBottomSheet> {
                 children: [
                   Text(
                     _isDescriptionMode ? 'Add activity details' : 'Add place',
-                    style: TextStyle(
-                      fontSize: 20,
-                      fontWeight: FontWeight.bold,
-                    ),
+                    style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
                   ),
                   IconButton(
                     icon: Icon(Icons.close),
-                    onPressed: () {
-                      _searchController.clear();
-                      Navigator.pop(context);
-                    },
+                    onPressed: () => Navigator.pop(context),
                   ),
                 ],
               ),
@@ -2352,7 +2678,6 @@ class _ActivityBottomSheetState extends State<ActivityBottomSheet> {
             Divider(height: 1),
 
             if (!_isDescriptionMode) ...[
-              // Search Mode UI
               Padding(
                 padding: const EdgeInsets.all(16.0),
                 child: TextField(
@@ -2376,17 +2701,11 @@ class _ActivityBottomSheetState extends State<ActivityBottomSheet> {
                         child: Column(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
-                            Icon(Icons.location_on_outlined, 
-                              size: 48, 
-                              color: Colors.grey
-                            ),
+                            Icon(Icons.location_on_outlined, size: 48, color: Colors.grey),
                             SizedBox(height: 16),
                             Text(
                               'Search a location to add to your activity',
-                              style: TextStyle(
-                                color: Colors.grey[600],
-                                fontSize: 16,
-                              ),
+                              style: TextStyle(color: Colors.grey[600], fontSize: 16),
                             ),
                           ],
                         ),
@@ -2412,91 +2731,107 @@ class _ActivityBottomSheetState extends State<ActivityBottomSheet> {
                         },
                       ),
               ),
-            ] else ...[
-              // Description Mode UI
-              if (_selectedAddress != null) ...[
-                SizedBox(height: 16),
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
-                  child: Container(
-                    padding: EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: Colors.grey[100],
-                      borderRadius: BorderRadius.circular(12),
+            ] else if (_selectedAddress != null) ...[
+              Expanded(
+                child: ListView(
+                  controller: controller,
+                  padding: EdgeInsets.all(16),
+                  children: [
+                    Container(
+                      padding: EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: Colors.grey[100],
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(Icons.place, color: Colors.grey[600]),
+                          SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  _extractPlaceName(_selectedAddress!),
+                                  style: TextStyle(fontWeight: FontWeight.w600, fontSize: 16),
+                                ),
+                                Text(
+                                  _selectedAddress!.substring(_extractPlaceName(_selectedAddress!).length + 2),
+                                  style: TextStyle(color: Colors.grey[600], fontSize: 14),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
-                    child: Row(
+                    SizedBox(height: 24),
+
+                    Text('When?', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
+                    SizedBox(height: 8),
+                    Row(
                       children: [
-                        Icon(Icons.place, color: Colors.grey[600]),
-                        SizedBox(width: 12),
                         Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                _extractPlaceName(_selectedAddress!),
-                                style: TextStyle(
-                                  fontWeight: FontWeight.w600,
-                                  fontSize: 16,
-                                ),
-                              ),
-                              Text(
-                                _selectedAddress!.substring(_extractPlaceName(_selectedAddress!).length + 2),
-                                style: TextStyle(
-                                  color: Colors.grey[600],
-                                  fontSize: 14,
-                                ),
-                              ),
-                            ],
+                          child: OutlinedButton.icon(
+                            icon: Icon(Icons.calendar_today),
+                            label: Text(_selectedDate != null 
+                              ? DateFormat('MMM d, yyyy').format(_selectedDate!)
+                              : 'Select date'),
+                            onPressed: () => _selectDate(context),
+                          ),
+                        ),
+                        SizedBox(width: 8),
+                        Expanded(
+                          child: OutlinedButton.icon(
+                            icon: Icon(Icons.access_time),
+                            label: Text(_selectedTime != null 
+                              ? _selectedTime!.format(context)
+                              : 'Select time'),
+                            onPressed: () => _selectTime(context),
                           ),
                         ),
                       ],
                     ),
-                  ),
-                ),
-                SizedBox(height: 16),
-                Padding(
-                  padding: EdgeInsets.fromLTRB(16, 0, 16, MediaQuery.of(context).viewInsets.bottom + 16),
-                  child: TextField(
-                    controller: _descriptionController,
-                    decoration: InputDecoration(
-                      hintText: 'Write something about this place...',
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
-                        borderSide: BorderSide(color: Colors.grey[300]!),
+                    SizedBox(height: 24),
+
+                    Text('Notes', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
+                    SizedBox(height: 8),
+                    TextField(
+                      controller: _notesController,
+                      decoration: InputDecoration(
+                        hintText: 'Add notes about this activity...',
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
                       ),
-                      enabledBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
-                        borderSide: BorderSide(color: Colors.grey[300]!),
-                      ),
-                      focusedBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
-                        borderSide: BorderSide(color: Colors.black),
-                      ),
-                      filled: true,
-                      fillColor: Colors.grey[50],
-                      contentPadding: EdgeInsets.all(16),
+                      maxLines: 3,
                     ),
-                    maxLines: null,
-                    style: TextStyle(fontSize: 16),
-                  ),
-                ),
-                Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: ElevatedButton(
-                    onPressed: () => _addActivity(context),
-                    child: Text('Add Activity'),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.black,
-                      foregroundColor: Colors.white,
-                      padding: EdgeInsets.symmetric(vertical: 16),
-                      minimumSize: Size(double.infinity, 50),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
+                    SizedBox(height: 24),
+
+                    Text('Description', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
+                    SizedBox(height: 8),
+                    TextField(
+                      controller: _descriptionController,
+                      decoration: InputDecoration(
+                        hintText: 'Write something about this place...',
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
                       ),
+                      maxLines: 3,
                     ),
+                  ],
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.all(16),
+                child: ElevatedButton(
+                  onPressed: () => _addActivity(context),
+                  child: Text('Add Activity'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.black,
+                    foregroundColor: Colors.white,
+                    minimumSize: Size(double.infinity, 50),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                   ),
                 ),
-              ],
+              ),
             ],
           ],
         ),
@@ -2505,30 +2840,22 @@ class _ActivityBottomSheetState extends State<ActivityBottomSheet> {
   }
 
   Future<void> _onSearchChanged(String value) async {
-    if (value.isNotEmpty) {
-      try {
-        var result = await widget.googlePlace.autocomplete.get(
-          value,
-          components: [Component("country", "us")],
-        );
-        
-        if (result != null && result.predictions != null && mounted) {
-          setState(() {
-            _predictions = result.predictions!;
-          });
-        }
-      } catch (e) {
-        print("Error during places search: $e");
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Error fetching places: $e')),
-          );
-        }
+    if (value.isEmpty) {
+      setState(() => _predictions = []);
+      return;
+    }
+
+    try {
+      var result = await widget.googlePlace.autocomplete.get(
+        value,
+        components: [Component("country", "us")],
+      );
+      
+      if (result?.predictions != null && mounted) {
+        setState(() => _predictions = result!.predictions!);
       }
-    } else {
-      setState(() {
-        _predictions = [];
-      });
+    } catch (e) {
+      print("Error during places search: $e");
     }
   }
 
@@ -2541,15 +2868,22 @@ class _ActivityBottomSheetState extends State<ActivityBottomSheet> {
       var result = await widget.googlePlace.details.get(_selectedPrediction!.placeId ?? '');
       Map<String, double>? location;
       
-      if (result != null && result.result != null) {
-        final lat = result.result?.geometry?.location?.lat;
-        final lng = result.result?.geometry?.location?.lng;
-        if (lat != null && lng != null) {
-          location = {
-            'lat': lat,
-            'lng': lng
-          };
-        }
+      if (result?.result?.geometry?.location != null) {
+        location = {
+          'lat': result!.result!.geometry!.location!.lat!,
+          'lng': result.result!.geometry!.location!.lng!
+        };
+      }
+
+      DateTime? dateTime;
+      if (_selectedDate != null && _selectedTime != null) {
+        dateTime = DateTime(
+          _selectedDate!.year,
+          _selectedDate!.month,
+          _selectedDate!.day,
+          _selectedTime!.hour,
+          _selectedTime!.minute,
+        );
       }
 
       final activity = Activity(
@@ -2557,16 +2891,15 @@ class _ActivityBottomSheetState extends State<ActivityBottomSheet> {
         description: _descriptionController.text.trim(),
         placeDescription: _selectedAddress,
         location: location,
+        notes: _notesController.text.trim(),
+        dateTime: dateTime,
       );
 
       widget.onActivityAdded(activity);
       Navigator.pop(context);
       
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Added ${activity.name}'),
-          duration: Duration(seconds: 2),
-        ),
+        SnackBar(content: Text('Added ${activity.name}'), duration: Duration(seconds: 2)),
       );
     }
   }
@@ -2577,6 +2910,9 @@ class Activity {
   final String description;
   final String? placeDescription;
   final Map<String, double>? location;
+  final String? imageUrl;
+  final String? notes;
+  final DateTime? dateTime;
   final Key key;
 
   Activity({
@@ -2584,6 +2920,9 @@ class Activity {
     this.description = '',
     this.placeDescription,
     this.location,
+    this.imageUrl,
+    this.notes,
+    this.dateTime,
   }) : key = UniqueKey();
 
   Map<String, dynamic> toMap() {
@@ -2592,6 +2931,9 @@ class Activity {
       'description': description,
       'placeDescription': placeDescription,
       'location': location,
+      'imageUrl': imageUrl,
+      'notes': notes,
+      'dateTime': dateTime?.toIso8601String(),
     };
   }
 }
