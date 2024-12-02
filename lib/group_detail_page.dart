@@ -356,6 +356,278 @@ Widget _buildAvatarFromData(Map<String, dynamic> userData, String userId) {
     ),
   );
 }
+
+void _showAddNoteDialog(BuildContext context, int index, Map<String, dynamic> activity) {
+  final TextEditingController noteController = TextEditingController();
+
+  showModalBottomSheet(
+    context: context,
+    isScrollControlled: true,
+    backgroundColor: Colors.transparent,
+    builder: (context) => Container(
+      padding: EdgeInsets.only(
+        bottom: MediaQuery.of(context).viewInsets.bottom,
+      ),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.vertical(top: Radius.circular(30)),
+      ),
+      child: Padding(
+        padding: EdgeInsets.all(20),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text(
+              'Add Note',
+              style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+              textAlign: TextAlign.center,
+            ),
+            SizedBox(height: 20),
+            Container(
+              padding: EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: Colors.grey[100],
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: Colors.grey[300]!),
+              ),
+              child: TextField(
+                controller: noteController,
+                decoration: InputDecoration(
+                  hintText: 'Write your note...',
+                  border: InputBorder.none,
+                ),
+                maxLines: 3,
+              ),
+            ),
+            SizedBox(height: 20),
+            Row(
+              children: [
+                Expanded(
+                  child: TextButton(
+                    onPressed: () => Navigator.pop(context),
+                    child: Text('Cancel'),
+                    style: TextButton.styleFrom(
+                      padding: EdgeInsets.symmetric(vertical: 16),
+                    ),
+                  ),
+                ),
+                SizedBox(width: 16),
+                Expanded(
+                  child: ElevatedButton(
+                    onPressed: () async {
+                      if (noteController.text.trim().isNotEmpty) {
+                        await _addNoteToActivity(index, {
+                          'text': noteController.text.trim(),
+                          'timestamp': DateTime.now().toIso8601String(),
+                        });
+                        Navigator.pop(context);
+                      }
+                    },
+                    child: Text('Add'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.black,
+                      padding: EdgeInsets.symmetric(vertical: 16),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    ),
+  );
+}
+
+Future<void> _addNoteToActivity(int activityIndex, Map<String, dynamic> note) async {
+  await FirebaseFirestore.instance
+      .collection('groups')
+      .doc(widget.groupId)
+      .get()
+      .then((doc) {
+    List<dynamic> activities = List.from(doc.data()!['activities']);
+    var currentNotes = activities[activityIndex]['notes'];
+    List<dynamic> notes = [];
+    
+    if (currentNotes is String) {
+      // Convert old format to new format if there's existing content
+      if (currentNotes.isNotEmpty) {
+        notes.add({
+          'text': currentNotes,
+          'timestamp': activities[activityIndex]['dateTime'] ?? DateTime.now().toIso8601String(),
+        });
+      }
+    } else if (currentNotes is List) {
+      notes = List.from(currentNotes);
+    }
+    
+    notes.add(note);
+    activities[activityIndex] = {
+      ...activities[activityIndex],
+      'notes': notes,
+    };
+    doc.reference.update({'activities': activities});
+  });
+}
+
+void _editNote(BuildContext context, int activityIndex, int noteIndex, Map<String, dynamic> note) {
+  final TextEditingController noteController = TextEditingController(text: note['text']);
+
+  showModalBottomSheet(
+    context: context,
+    isScrollControlled: true,
+    backgroundColor: Colors.transparent,
+    builder: (context) => Container(
+      padding: EdgeInsets.only(
+        bottom: MediaQuery.of(context).viewInsets.bottom,
+      ),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.vertical(top: Radius.circular(30)),
+      ),
+      child: Padding(
+        padding: EdgeInsets.all(20),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text(
+              'Edit Note',
+              style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+              textAlign: TextAlign.center,
+            ),
+            SizedBox(height: 20),
+            Container(
+              padding: EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: Colors.grey[100],
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: Colors.grey[300]!),
+              ),
+              child: TextField(
+                controller: noteController,
+                decoration: InputDecoration(
+                  hintText: 'Write your note...',
+                  border: InputBorder.none,
+                ),
+                maxLines: 3,
+              ),
+            ),
+            SizedBox(height: 20),
+            Row(
+              children: [
+                Expanded(
+                  child: TextButton(
+                    onPressed: () => Navigator.pop(context),
+                    child: Text('Cancel'),
+                    style: TextButton.styleFrom(
+                      padding: EdgeInsets.symmetric(vertical: 16),
+                    ),
+                  ),
+                ),
+                SizedBox(width: 16),
+                Expanded(
+                  child: ElevatedButton(
+                    onPressed: () async {
+                      if (noteController.text.trim().isNotEmpty) {
+                        await _updateNote(activityIndex, noteIndex, {
+                          'text': noteController.text.trim(),
+                          'timestamp': DateTime.now().toIso8601String(),
+                        });
+                        Navigator.pop(context);
+                      }
+                    },
+                    child: Text('Save'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.black,
+                      padding: EdgeInsets.symmetric(vertical: 16),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    ),
+  );
+}
+
+Future<void> _updateNote(int activityIndex, int noteIndex, Map<String, dynamic> updatedNote) async {
+  await FirebaseFirestore.instance
+      .collection('groups')
+      .doc(widget.groupId)
+      .get()
+      .then((doc) {
+    List<dynamic> activities = List.from(doc.data()!['activities']);
+    var currentNotes = activities[activityIndex]['notes'];
+    List<dynamic> notes = [];
+    
+    if (currentNotes is String) {
+      // Convert old format to new format
+      if (currentNotes.isNotEmpty) {
+        notes = [{
+          'text': currentNotes,
+          'timestamp': activities[activityIndex]['dateTime'] ?? DateTime.now().toIso8601String(),
+        }];
+      }
+    } else if (currentNotes is List) {
+      notes = List.from(currentNotes);
+    }
+
+    if (noteIndex < notes.length) {
+      notes[noteIndex] = updatedNote;
+    }
+    
+    activities[activityIndex] = {
+      ...activities[activityIndex],
+      'notes': notes,
+    };
+    doc.reference.update({'activities': activities});
+  });
+}
+
+Future<void> _deleteNote(BuildContext context, int activityIndex, int noteIndex) async {
+  await FirebaseFirestore.instance
+      .collection('groups')
+      .doc(widget.groupId)
+      .get()
+      .then((doc) {
+    List<dynamic> activities = List.from(doc.data()!['activities']);
+    var currentNotes = activities[activityIndex]['notes'];
+    List<dynamic> notes = [];
+    
+    if (currentNotes is String) {
+      // Convert old format to new format
+      if (currentNotes.isNotEmpty) {
+        notes = [{
+          'text': currentNotes,
+          'timestamp': activities[activityIndex]['dateTime'] ?? DateTime.now().toIso8601String(),
+        }];
+      }
+    } else if (currentNotes is List) {
+      notes = List.from(currentNotes);
+    }
+
+    if (noteIndex < notes.length) {
+      notes.removeAt(noteIndex);
+    }
+    
+    activities[activityIndex] = {
+      ...activities[activityIndex],
+      'notes': notes,
+    };
+    doc.reference.update({'activities': activities});
+  });
+}
+
   void _navigateToProfile(BuildContext context, String userId) {
     Navigator.push(
       context,
@@ -407,6 +679,123 @@ void _editPlan(Map<String, dynamic> groupData) {
     );
   }
 
+void _showDateTimePicker(BuildContext context, int index, Map<String, dynamic> activity) {
+  DateTime initialDate = activity['dateTime'] != null 
+      ? DateTime.parse(activity['dateTime'])
+      : DateTime.now();
+
+  showModalBottomSheet(
+    context: context,
+    isScrollControlled: true,
+    backgroundColor: Colors.transparent,
+    builder: (context) => Container(
+      padding: EdgeInsets.only(
+        bottom: MediaQuery.of(context).viewInsets.bottom,
+      ),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.vertical(top: Radius.circular(30)),
+      ),
+      child: Padding(
+        padding: EdgeInsets.symmetric(horizontal: 20),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            SizedBox(height: 20),
+            Text(
+              'Set Date & Time',
+              style: TextStyle(
+                fontSize: 24,
+                fontWeight: FontWeight.bold,
+                color: Colors.black,
+              ),
+              textAlign: TextAlign.center,
+            ),
+            SizedBox(height: 24),
+            Container(
+              padding: EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: Colors.grey[100],
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: Colors.grey[300]!),
+              ),
+              child: CupertinoDateTextBox(
+                initialValue: initialDate,
+                onDateChange: (DateTime? date) {
+                  if (date != null) {
+                    initialDate = date;
+                  }
+                },
+                hintText: 'Select date and time',
+              ),
+            ),
+            SizedBox(height: 24),
+            Row(
+              children: [
+                Expanded(
+                  child: TextButton(
+                    child: Text(
+                      'Cancel',
+                      style: TextStyle(
+                        color: Colors.black,
+                        fontSize: 17,
+                      ),
+                    ),
+                    style: TextButton.styleFrom(
+                      padding: EdgeInsets.symmetric(vertical: 16),
+                      side: BorderSide(color: Colors.grey[300]!),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
+                    onPressed: () => Navigator.pop(context),
+                  ),
+                ),
+                SizedBox(width: 16),
+                Expanded(
+                  child: ElevatedButton(
+                    child: Text(
+                      'Save',
+                      style: TextStyle(
+                        color: Colors.black,
+                        fontSize: 17,
+                      ),
+                    ),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Color(0xFFFFC107),
+                      elevation: 0,
+                      padding: EdgeInsets.symmetric(vertical: 16),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
+                    onPressed: () async {
+                      await FirebaseFirestore.instance
+                          .collection('groups')
+                          .doc(widget.groupId)
+                          .get()
+                          .then((doc) {
+                        List<dynamic> activities = List.from(doc.data()!['activities']);
+                        activities[index] = {
+                          ...activities[index],
+                          'dateTime': initialDate.toIso8601String(),
+                        };
+                        doc.reference.update({'activities': activities});
+                      });
+                      Navigator.pop(context);
+                    },
+                  ),
+                ),
+              ],
+            ),
+            SizedBox(height: 20),
+          ],
+        ),
+      ),
+    ),
+  );
+}
 
 void _showNotesDialog(BuildContext context, int index, Map<String, dynamic> activity) {
   DateTime initialDate = activity['dateTime'] != null 
@@ -748,18 +1137,14 @@ Widget _buildListTileFromData(Map<String, dynamic> userData, String userId) {
   }
 
 Widget _buildDetailsTab(Map<String, dynamic> groupData) {
-  print("Group Data: $groupData"); // Debug print
   List<dynamic> activities = groupData['activities'] ?? [];
-  print("Activities from group: $activities"); // Debug print
 
   return ListView(
     padding: EdgeInsets.all(16),
     children: [
-      // Build map with activities from groupData
       if (activities.isNotEmpty) 
         _buildOverviewMap(activities),
       
-      // Activities Section Header
       Padding(
         padding: const EdgeInsets.symmetric(vertical: 16.0),
         child: Row(
@@ -773,16 +1158,10 @@ Widget _buildDetailsTab(Map<String, dynamic> groupData) {
                 letterSpacing: -0.5,
               ),
             ),
-            TextButton(
+            TextButton.icon(
               onPressed: _addActivity,
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(Icons.add, size: 20),
-                  SizedBox(width: 4),
-                  Text('Add'),
-                ],
-              ),
+              icon: Icon(Icons.add, size: 20),
+              label: Text('Add'),
               style: TextButton.styleFrom(
                 foregroundColor: Colors.blue,
                 padding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
@@ -792,7 +1171,6 @@ Widget _buildDetailsTab(Map<String, dynamic> groupData) {
         ),
       ),
 
-      // Activities List
       if (activities.isEmpty)
         Center(
           child: Column(
@@ -802,176 +1180,236 @@ Widget _buildDetailsTab(Map<String, dynamic> groupData) {
               SizedBox(height: 16),
               Text(
                 'No activities added yet',
-                style: TextStyle(
-                  color: Colors.grey[600],
-                  fontSize: 16,
-                ),
+                style: TextStyle(color: Colors.grey[600], fontSize: 16),
               ),
               Text(
                 'Add some activities to get started!',
-                style: TextStyle(
-                  color: Colors.grey[500],
-                  fontSize: 14,
-                ),
+                style: TextStyle(color: Colors.grey[500], fontSize: 14),
               ),
             ],
           ),
         ),
-...activities.asMap().entries.map((entry) {
-  int index = entry.key;
-  Map<String, dynamic> activity = entry.value;
-  List<String> imageUrls = List<String>.from(groupData['imageUrls'] ?? []);
-  String? imageUrl = index < imageUrls.length ? imageUrls[index] : null;
-  
-  // Parse the datetime
-  DateTime? activityDateTime;
-  if (activity['dateTime'] != null) {
-    activityDateTime = DateTime.parse(activity['dateTime']);
-  }
-  String timeDisplay = activityDateTime != null 
-      ? DateFormat('MMM d, yyyy h:mm a').format(activityDateTime)
-      : '[set time/date]';
 
-  String notes = activity['notes'] ?? '[add notes]';
-  
-  return Card(
-    elevation: 0,
-    margin: EdgeInsets.only(bottom: 12),
-    shape: RoundedRectangleBorder(
-      borderRadius: BorderRadius.circular(12),
-      side: BorderSide(color: Colors.grey[200]!, width: 1),
-    ),
-    child: Padding(
-      padding: EdgeInsets.all(16),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Left side - Image (unchanged)
-          ClipRRect(
-            borderRadius: BorderRadius.circular(8),
-            child: imageUrl != null
-              ? Image.network(
-                  imageUrl,
-                  width: 80,
-                  height: 80,
-                  fit: BoxFit.cover,
-                  errorBuilder: (context, error, stackTrace) => Container(
-                    width: 80,
-                    height: 80,
-                    color: Colors.grey[200],
-                    child: Icon(Icons.error, color: Colors.grey),
-                  ),
-                )
-              : Container(
-                  width: 80,
-                  height: 80,
-                  color: Colors.grey[200],
-                  child: Icon(Icons.image, color: Colors.grey),
-                ),
+      ...activities.asMap().entries.map((entry) {
+        int index = entry.key;
+        Map<String, dynamic> activity = entry.value;
+        List<String> imageUrls = List<String>.from(groupData['imageUrls'] ?? []);
+        String? imageUrl = index < imageUrls.length ? imageUrls[index] : null;
+        List<dynamic> notes = [];
+var rawNotes = activity['notes'];
+if (rawNotes is String && rawNotes.isNotEmpty) {
+  // Convert old format (single string) to new format (list of notes)
+  notes = [{
+    'text': rawNotes,
+    'timestamp': activity['dateTime'] ?? DateTime.now().toIso8601String(),
+  }];
+} else if (rawNotes is List) {
+  notes = List.from(rawNotes);
+}
+        
+        DateTime? activityDateTime;
+        if (activity['dateTime'] != null) {
+          activityDateTime = DateTime.parse(activity['dateTime']);
+        }
+
+        return Card(
+          margin: EdgeInsets.only(bottom: 16),
+          elevation: 0,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+            side: BorderSide(color: Colors.grey[200]!),
           ),
-          SizedBox(width: 16),
-          // Right side - Content
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
+          clipBehavior: Clip.antiAlias,
+          child: Theme(
+            data: Theme.of(context).copyWith(
+              dividerColor: Colors.transparent,
+            ),
+            child: ExpansionTile(
+              tilePadding: EdgeInsets.zero,
+              childrenPadding: EdgeInsets.zero,
+              title: Padding(
+                padding: const EdgeInsets.all(12),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Expanded(
-                      child: Text(
-                        activity['name'] ?? '[title]',
-                        style: TextStyle(
-                          fontWeight: FontWeight.w600,
-                          fontSize: 16,
-                        ),
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(8),
+                      child: SizedBox(
+                        width: 80,
+                        height: 80,
+                        child: imageUrl != null
+                          ? Image.network(
+                              imageUrl,
+                              fit: BoxFit.cover,
+                              errorBuilder: (context, error, stackTrace) => Container(
+                                color: Colors.grey[200],
+                                child: Icon(Icons.error, color: Colors.grey),
+                              ),
+                            )
+                          : Container(
+                              color: Colors.grey[200],
+                              child: Icon(Icons.image, color: Colors.grey),
+                            ),
                       ),
                     ),
-                    IconButton(
-                      icon: Icon(Icons.edit_outlined, size: 20, color: Colors.grey[600]),
-                      constraints: BoxConstraints(minWidth: 40),
-                      padding: EdgeInsets.zero,
-                      onPressed: () => _editActivity(index, activity),
-                    ),
-                  ],
-                ),
+                    SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            activity['name'] ?? '[title]',
+                            style: TextStyle(
+                              fontWeight: FontWeight.w600,
+                              fontSize: 16,
+                            ),
+                          ),
+                          SizedBox(height: 8),
 InkWell(
-  onTap: () => _showNotesDialog(context, index, activity),
-  child: Padding(
-    padding: EdgeInsets.symmetric(vertical: 4),
-    child: Row(
-      children: [
-        Icon(Icons.access_time, size: 16, color: Colors.grey[600]),
-        SizedBox(width: 4),
-        Text(
+  onTap: () => _showDateTimePicker(context, index, activity),
+  child: Row(
+    children: [
+      Icon(Icons.access_time, 
+        size: 16, 
+        color: Colors.grey[600]
+      ),
+      SizedBox(width: 4),
+      Expanded(
+        child: Text(
           activity['dateTime'] != null 
-              ? DateFormat('MMM d, yyyy h:mm a').format(DateTime.parse(activity['dateTime']))
-              : '[set time/date]',
+            ? DateFormat('MMM d, yyyy h:mm a')
+                .format(DateTime.parse(activity['dateTime']))
+            : 'Set time/date',
           style: TextStyle(
-            color: activity['dateTime'] != null ? Colors.black87 : Colors.grey[600],
+            color: activity['dateTime'] != null 
+              ? Colors.black87 
+              : Colors.grey[600],
             fontSize: 14,
           ),
         ),
-      ],
-    ),
+      ),
+/*       Icon(Icons.chevron_right, 
+        size: 16, 
+        color: Colors.grey[600]
+      ), */
+    ],
   ),
 ),
-InkWell(
-  onTap: () => _showNotesDialog(context, index, activity),
-  child: Padding(
-    padding: EdgeInsets.symmetric(vertical: 4),
-    child: Row(
-      children: [
-        Icon(Icons.note_add_outlined, size: 16, color: Colors.grey[600]),
-        SizedBox(width: 4),
-        Expanded(
-          child: Text(
-            activity['notes'] ?? '[add notes]',
-            style: TextStyle(
-              color: activity['notes'] != null ? Colors.black87 : Colors.grey[600],
-              fontSize: 14,
-            ),
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
-          ),
-        ),
-      ],
-    ),
-  ),
-),
-                SizedBox(height: 8),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                  children: [
-                    Column(
-                      children: [
-                        Icon(Icons.thumb_down, color: Colors.grey[400]),
-                        Text('Nope', style: TextStyle(fontSize: 12)),
-                      ],
-                    ),
-                    Column(
-                      children: [
-                        Icon(Icons.remove_red_eye, color: Colors.grey[400]),
-                        Text('Maybe', style: TextStyle(fontSize: 12)),
-                      ],
-                    ),
-                    Column(
-                      children: [
-                        Icon(Icons.favorite, color: Colors.grey[400]),
-                        Text('Love it!', style: TextStyle(fontSize: 12)),
-                      ],
+                        ],
+                      ),
                     ),
                   ],
+                ),
+              ),
+              children: [
+                Container(
+                  decoration: BoxDecoration(
+                    border: Border(
+                      top: BorderSide(color: Colors.grey[200]!),
+                    ),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Padding(
+                        padding: EdgeInsets.all(12),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Text(
+                              'Notes',
+                              style: TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                            TextButton.icon(
+                              onPressed: () => _showAddNoteDialog(context, index, activity),
+                              icon: Icon(Icons.add, size: 20),
+                              label: Text('Add'),
+                              style: TextButton.styleFrom(
+                                foregroundColor: Colors.blue,
+                                padding: EdgeInsets.symmetric(horizontal: 12),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      if (notes.isEmpty)
+                        Padding(
+                          padding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                          child: Text(
+                            'No notes added yet',
+                            style: TextStyle(color: Colors.grey[600]),
+                          ),
+                        ),
+                      ...notes.asMap().entries.map((noteEntry) {
+                        int noteIndex = noteEntry.key;
+                        Map<String, dynamic> note = noteEntry.value;
+                        DateTime noteTime = DateTime.parse(note['timestamp']);
+                        
+                        return Container(
+                          decoration: BoxDecoration(
+                            border: Border(
+                              top: noteIndex > 0 ? BorderSide(color: Colors.grey[200]!) : BorderSide.none,
+                            ),
+                          ),
+                          child: Padding(
+                            padding: EdgeInsets.all(12),
+                            child: Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        note['text'],
+                                        style: TextStyle(fontSize: 14),
+                                      ),
+                                      SizedBox(height: 4),
+                                      Text(
+                                        DateFormat('MMM d, yyyy h:mm a').format(noteTime),
+                                        style: TextStyle(
+                                          fontSize: 12,
+                                          color: Colors.grey[600],
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                Row(
+                                  children: [
+                                    IconButton(
+                                      icon: Icon(Icons.edit, size: 20),
+                                      onPressed: () => _editNote(context, index, noteIndex, note),
+                                      padding: EdgeInsets.zero,
+                                      constraints: BoxConstraints(),
+                                    ),
+                                    SizedBox(width: 8),
+                                    IconButton(
+                                      icon: Icon(Icons.delete_outline, size: 20),
+                                      onPressed: () => _deleteNote(context, index, noteIndex),
+                                      padding: EdgeInsets.zero,
+                                      constraints: BoxConstraints(),
+                                    ),
+                                  ],
+                                ),
+                              ],
+                            ),
+                          ),
+                        );
+                      }).toList(),
+                    ],
+                  ),
                 ),
               ],
             ),
           ),
-        ],
-      ),
-    ),
-  );
-}).toList(),
+        );
+      }).toList(),
       
-      SizedBox(height: 16), // Bottom padding
+      SizedBox(height: 16),
     ],
   );
 }
@@ -1361,23 +1799,7 @@ Widget _buildPostCard(Map<String, dynamic> postData, String postId) {
                   },
                 ),
               ),
-            // Comments Section
-/*             SizedBox(height: 16),
-            Row(
-              children: [
-                Icon(Icons.chat_bubble_outline, size: 20, color: Colors.grey[600]),
-                SizedBox(width: 8),
-                Text(
-                  'Comments',
-                  style: TextStyle(
-                    color: Colors.grey[600],
-                    fontSize: 14,
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
-              ],
-            ), */
-            // Comments Stream
+
              SizedBox(height: 16),
 StreamBuilder<QuerySnapshot>(
   stream: FirebaseFirestore.instance
@@ -1636,95 +2058,6 @@ Container(
     ],
   );
 }
-
-/* void _showCommentDialog(BuildContext context, String postId) {
-  final TextEditingController commentController = TextEditingController();
-
-  showModalBottomSheet(
-    context: context,
-    isScrollControlled: true,
-    backgroundColor: Colors.transparent,
-    builder: (context) => Container(
-      padding: EdgeInsets.only(
-        bottom: MediaQuery.of(context).viewInsets.bottom,
-      ),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Container(
-            padding: EdgeInsets.all(16),
-            child: Row(
-              children: [
-                CircleAvatar(
-                  radius: 16,
-                  backgroundColor: Colors.grey[300],
-                  backgroundImage: FirebaseAuth.instance.currentUser?.photoURL != null && 
-                                 FirebaseAuth.instance.currentUser!.photoURL!.isNotEmpty 
-                      ? NetworkImage(FirebaseAuth.instance.currentUser!.photoURL!)
-                      : null,
-                  child: (FirebaseAuth.instance.currentUser?.photoURL == null || 
-                         FirebaseAuth.instance.currentUser!.photoURL!.isEmpty)
-                      ? Icon(Icons.person, size: 16, color: Colors.grey[600])
-                      : null,
-                ),
-                SizedBox(width: 12),
-                Expanded(
-                  child: TextField(
-                    controller: commentController,
-                    autofocus: true,
-                    decoration: InputDecoration(
-                      hintText: 'Write a comment...',
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(20),
-                        borderSide: BorderSide.none,
-                      ),
-                      filled: true,
-                      fillColor: Colors.grey[100],
-                      contentPadding: EdgeInsets.symmetric(
-                        horizontal: 16,
-                        vertical: 12,
-                      ),
-                    ),
-                    maxLines: null,
-                  ),
-                ),
-                SizedBox(width: 12),
-                TextButton(
-                  onPressed: () async {
-                    if (commentController.text.trim().isNotEmpty) {
-                      final user = FirebaseAuth.instance.currentUser;
-                      await FirebaseFirestore.instance
-                          .collection('group_posts')
-                          .doc(postId)
-                          .collection('comments')
-                          .add({
-                        'text': commentController.text.trim(),
-                        'authorId': user?.uid,
-                        'authorName': user?.displayName ?? 'Anonymous',
-                        'authorPhoto': user?.photoURL,
-                        'timestamp': FieldValue.serverTimestamp(),
-                      });
-                      Navigator.pop(context);
-                    }
-                  },
-                  child: Text('Post'),
-                  style: TextButton.styleFrom(
-                    foregroundColor: Colors.blue,
-                    padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    ),
-  );
-} */
 
 Widget _buildChatTab() {
   return Column(
@@ -2886,14 +3219,20 @@ class _ActivityBottomSheetState extends State<ActivityBottomSheet> {
         );
       }
 
-      final activity = Activity(
-        name: _extractPlaceName(_selectedAddress!),
-        description: _descriptionController.text.trim(),
-        placeDescription: _selectedAddress,
-        location: location,
-        notes: _notesController.text.trim(),
-        dateTime: dateTime,
-      );
+// In the _addActivity method of ActivityBottomSheet, replace the activity creation with:
+final activity = Activity(
+  name: _extractPlaceName(_selectedAddress!),
+  description: _descriptionController.text.trim(),
+  placeDescription: _selectedAddress,
+  location: location,
+  notes: [
+    {
+      'text': _notesController.text.trim(),
+      'timestamp': DateTime.now().toIso8601String(),
+    }
+  ],
+  dateTime: dateTime,
+);
 
       widget.onActivityAdded(activity);
       Navigator.pop(context);
@@ -2911,7 +3250,7 @@ class Activity {
   final String? placeDescription;
   final Map<String, double>? location;
   final String? imageUrl;
-  final String? notes;
+  final List<Map<String, dynamic>> notes;  // Changed from String? to List
   final DateTime? dateTime;
   final Key key;
 
@@ -2921,7 +3260,7 @@ class Activity {
     this.placeDescription,
     this.location,
     this.imageUrl,
-    this.notes,
+    this.notes = const [],  // Default empty list
     this.dateTime,
   }) : key = UniqueKey();
 
