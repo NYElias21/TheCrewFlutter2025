@@ -1591,8 +1591,7 @@ InkWell(
                   ],
                 ),
               ),
-              children: [
-// Replace the notes section in the ExpansionTile's children with:
+children: [
 Container(
   decoration: BoxDecoration(
     border: Border(
@@ -1602,6 +1601,40 @@ Container(
   child: Column(
     crossAxisAlignment: CrossAxisAlignment.start,
     children: [
+      // Description Section
+      if (activity['description'] != null && activity['description'].toString().isNotEmpty)
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Padding(
+              padding: EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Description',
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  SizedBox(height: 8),
+                  Text(
+                    activity['description'],
+                    style: TextStyle(
+                      fontSize: 15,
+                      height: 1.4,
+                      color: Colors.grey[800],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Divider(height: 1, color: Colors.grey[200]),
+          ],
+        ),
+
+      // Notes Section
       Padding(
         padding: EdgeInsets.all(16),
         child: Row(
@@ -1626,19 +1659,6 @@ Container(
           ],
         ),
       ),
-/*       // Add this after the notes header and before the list/empty state
-if (notes.isNotEmpty)
-  Padding(
-    padding: EdgeInsets.only(left: 16, right: 16, bottom: 4), // Reduced padding
-    child: Text(
-      'Swipe left to delete, right to edit',
-      style: TextStyle(
-        color: Colors.grey[500],
-        fontSize: 12,
-        letterSpacing: -0.2, // Slightly tighter letter spacing
-      ),
-    ),
-  ), */
       if (notes.isEmpty)
         Center(
           child: Padding(
