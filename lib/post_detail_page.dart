@@ -500,7 +500,7 @@ void _saveSharedPost(String caption, bool isGroupActivity) async {
     final data = widget.post.data() as Map<String, dynamic>;
     String groupId = '';
 
-    // Properly handle activities with location data
+    // Process activities and ensure photos are properly carried over
     List<Map<String, dynamic>> processedActivities = [];
     if (data['activities'] != null) {
       for (var activity in data['activities']) {
@@ -508,7 +508,6 @@ void _saveSharedPost(String caption, bool isGroupActivity) async {
         
         // Ensure location data is properly structured
         if (activity['location'] != null) {
-          // If location is a GeoPoint, convert it to a map with lat/lng
           if (activity['location'] is GeoPoint) {
             GeoPoint geoPoint = activity['location'];
             processedActivity['location'] = {
@@ -516,11 +515,25 @@ void _saveSharedPost(String caption, bool isGroupActivity) async {
               'lng': geoPoint.longitude
             };
           } 
-          // If location is already a map, keep it as is
           else if (activity['location'] is Map) {
             processedActivity['location'] = Map<String, dynamic>.from(activity['location']);
           }
         }
+
+        // If there's already a photoUrl, keep it
+        if (!activity.containsKey('photoUrl') && activity['placeId'] != null) {
+          var result = await googlePlace.details.get(
+            activity['placeId'],
+            fields: 'photos'
+          );
+          
+          if (result?.result?.photos != null && result!.result!.photos!.isNotEmpty) {
+            String photoReference = result.result!.photos![0].photoReference!;
+            String photoUrl = 'https://maps.googleapis.com/maps/api/place/photo?maxwidth=800&photo_reference=$photoReference&key=AIzaSyCrQnPUOQ6ho_LItD4mC1yRFcA0SEWKYBM';
+            processedActivity['photoUrl'] = photoUrl;
+          }
+        }
+        
         processedActivities.add(processedActivity);
       }
     }
@@ -536,7 +549,7 @@ void _saveSharedPost(String caption, bool isGroupActivity) async {
         'originalPostId': widget.post.id,
         'postType': data['postType'],
         'itinerary': data['itinerary'],
-        'activities': processedActivities, // Use processed activities
+        'activities': processedActivities,  // Use processed activities
         'date': null,
       });
       groupId = groupRef.id;
@@ -552,7 +565,7 @@ void _saveSharedPost(String caption, bool isGroupActivity) async {
       'imageUrls': data['imageUrls'],
       'postType': data['postType'],
       'itinerary': data['itinerary'],
-      'activities': processedActivities, // Use processed activities
+      'activities': processedActivities,  // Use processed activities
       'isGroupActivity': isGroupActivity,
       'groupId': isGroupActivity ? groupId : null,
       'groupMembers': isGroupActivity ? [FirebaseAuth.instance.currentUser!.uid] : [],

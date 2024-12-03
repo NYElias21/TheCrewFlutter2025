@@ -208,16 +208,19 @@ SliverToBoxAdapter(
                         style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
                       ),
                       SizedBox(height: 16),
-                      Row(
-                        children: [
-                          Icon(Icons.calendar_today, size: 16, color: Colors.grey),
-                          SizedBox(width: 4),
-                          Text(
-                            date != null ? DateFormat('EEE, MMM d').format(date) : 'Set date',
-                            style: TextStyle(color: Colors.grey),
-                          ),
-                        ],
-                      ),
+Row(
+  children: [
+    Icon(Icons.calendar_today, size: 16, color: Colors.grey),
+    SizedBox(width: 4),
+    GestureDetector(
+      onTap: () => _showDatePicker(context, date),
+      child: Text(
+        date != null ? DateFormat('EEE, MMM d').format(date) : 'Set date',
+        style: TextStyle(color: Colors.grey),
+      ),
+    ),
+  ],
+),
                       SizedBox(height: 16),
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -395,6 +398,11 @@ void _showAddNoteDialog(BuildContext context, int index, Map<String, dynamic> ac
                 controller: noteController,
                 decoration: InputDecoration(
                   hintText: 'Write your note...',
+                  helperText: 'Swipe left to delete, right to edit notes',
+                  helperStyle: TextStyle(
+                    color: Colors.grey[600],
+                    fontSize: 12,
+                  ),
                   border: InputBorder.none,
                 ),
                 maxLines: 3,
@@ -635,49 +643,312 @@ Future<void> _deleteNote(BuildContext context, int activityIndex, int noteIndex)
     );
   }
 
-  void _showDatePicker(BuildContext context, DateTime? currentDate) async {
-  final DateTime? picked = await showDatePicker(
+void _showDatePicker(BuildContext context, DateTime? currentDate) {
+  showModalBottomSheet(
     context: context,
-    initialDate: currentDate ?? DateTime.now(),
-    firstDate: DateTime.now(),
-    lastDate: DateTime.now().add(Duration(days: 365)),
+    isScrollControlled: true,
+    backgroundColor: Colors.transparent,
+    builder: (context) => Container(
+      padding: EdgeInsets.only(
+        bottom: MediaQuery.of(context).viewInsets.bottom,
+      ),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.vertical(top: Radius.circular(30)),
+      ),
+      child: Padding(
+        padding: EdgeInsets.symmetric(horizontal: 20),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            SizedBox(height: 20),
+            Text(
+              'Set Date',
+              style: TextStyle(
+                fontSize: 24,
+                fontWeight: FontWeight.bold,
+                color: Colors.black,
+              ),
+              textAlign: TextAlign.center,
+            ),
+            SizedBox(height: 24),
+            Container(
+              padding: EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: Colors.grey[100],
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: Colors.grey[300]!),
+              ),
+              child: CupertinoDateTextBox(
+                initialValue: currentDate ?? DateTime.now(),
+                onDateChange: (DateTime? date) async {
+                  if (date != null) {
+                    await FirebaseFirestore.instance
+                        .collection('groups')
+                        .doc(widget.groupId)
+                        .update({'date': Timestamp.fromDate(date)});
+                    Navigator.pop(context);
+                  }
+                },
+                hintText: 'Select date and time',
+              ),
+            ),
+            SizedBox(height: 24),
+            Row(
+              children: [
+                Expanded(
+                  child: TextButton(
+                    child: Text(
+                      'Cancel',
+                      style: TextStyle(
+                        color: Colors.black,
+                        fontSize: 17,
+                      ),
+                    ),
+                    style: TextButton.styleFrom(
+                      padding: EdgeInsets.symmetric(vertical: 16),
+                      side: BorderSide(color: Colors.grey[300]!),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
+                    onPressed: () => Navigator.pop(context),
+                  ),
+                ),
+              ],
+            ),
+            SizedBox(height: 20),
+          ],
+        ),
+      ),
+    ),
   );
-  if (picked != null && picked != currentDate) {
-    await FirebaseFirestore.instance
-        .collection('groups')
-        .doc(widget.groupId)
-        .update({'date': Timestamp.fromDate(picked)});
-  }
 }
 
 void _editPlan(Map<String, dynamic> groupData) {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Text('Edit Plan'),
-        content: TextField(
-          controller: _nameController..text = groupData['title'] ?? '',
-          decoration: InputDecoration(labelText: 'Plan Name'),
+  // Create local variables to track changes
+  DateTime selectedDate = groupData['date'] != null 
+      ? (groupData['date'] as Timestamp).toDate()
+      : DateTime.now();
+  List<dynamic> activities = List.from(groupData['activities'] ?? []);
+  _nameController.text = groupData['title'] ?? '';
+
+  showModalBottomSheet(
+    context: context,
+    isScrollControlled: true,
+    backgroundColor: Colors.transparent,
+    builder: (context) => StatefulBuilder(
+      builder: (BuildContext context, StateSetter setState) {
+        return DraggableScrollableSheet(
+          initialChildSize: 0.9,
+          minChildSize: 0.5,
+          maxChildSize: 0.9,
+          builder: (_, controller) => Container(
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Header
+                Container(
+                  padding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                  decoration: BoxDecoration(
+                    border: Border(bottom: BorderSide(color: Colors.grey[200]!)),
+                  ),
+                  child: Row(
+                    children: [
+                      IconButton(
+                        icon: Icon(Icons.arrow_back),
+                        onPressed: () => Navigator.pop(context),
+                      ),
+                      SizedBox(width: 8),
+                      Text(
+                        'Edit plan',
+                        style: TextStyle(
+                          fontSize: 24,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+
+                Expanded(
+                  child: ListView(
+                    controller: controller,
+                    padding: EdgeInsets.all(16),
+                    children: [
+                      // Plan Name Section
+                      Text(
+                        'Name of Plan',
+                        style: TextStyle(
+                          fontSize: 20,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      SizedBox(height: 8),
+                      Container(
+                        decoration: BoxDecoration(
+                          color: Colors.grey[100],
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: TextField(
+                          controller: _nameController,
+                          decoration: InputDecoration(
+                            border: InputBorder.none,
+                            contentPadding: EdgeInsets.all(16),
+                            suffixIcon: IconButton(
+                              icon: Icon(Icons.close, color: Colors.grey),
+                              onPressed: () => _nameController.clear(),
+                            ),
+                          ),
+                        ),
+                      ),
+                      
+                      SizedBox(height: 24),
+                      
+                      // Date & Time Section
+                      Text(
+                        'Date & time',
+                        style: TextStyle(
+                          fontSize: 20,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      SizedBox(height: 8),
+                      Container(
+                        decoration: BoxDecoration(
+                          color: Colors.grey[100],
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: CupertinoDateTextBox(
+                          initialValue: selectedDate,
+                          onDateChange: (DateTime? date) {
+                            if (date != null) {
+                              setState(() {
+                                selectedDate = date;
+                              });
+                            }
+                          },
+                        ),
+                      ),
+
+                      SizedBox(height: 24),
+
+                      // Activities Section
+                      Text(
+                        'Activities',
+                        style: TextStyle(
+                          fontSize: 20,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      Text(
+                        'Drag and drop in the order you want to do them',
+                        style: TextStyle(
+                          color: Colors.grey[600],
+                          fontSize: 14,
+                        ),
+                      ),
+                      SizedBox(height: 16),
+                      
+                      // Activities List
+...List.generate(
+  activities.length,
+  (index) {
+    final activity = activities[index];
+    return Padding(
+      padding: EdgeInsets.only(bottom: 12),
+      child: Container(
+        decoration: BoxDecoration(
+          border: Border.all(color: Colors.grey[200]!),
+          borderRadius: BorderRadius.circular(12),
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: Text('Cancel'),
+        child: ListTile(
+          leading: ClipRRect(
+            borderRadius: BorderRadius.circular(8),
+            child: Image.network(
+              activity['photoUrl'] ?? 'https://via.placeholder.com/50',
+              width: 50,
+              height: 50,
+              fit: BoxFit.cover,
+              errorBuilder: (context, error, stackTrace) {
+                print('Error loading image: $error');
+                return Container(
+                  width: 50,
+                  height: 50,
+                  color: Colors.grey[300],
+                  child: Icon(Icons.image, color: Colors.grey[600]),
+                );
+              },
+            ),
           ),
-          ElevatedButton(
-            onPressed: () async {
-              await FirebaseFirestore.instance
-                  .collection('groups')
-                  .doc(widget.groupId)
-                  .update({'title': _nameController.text});
-              Navigator.pop(context);
+          title: Text(activity['name'] ?? ''),
+          subtitle: Text(
+            activity['placeDescription']?.split(',').first ?? '',
+            style: TextStyle(color: Colors.grey[600]),
+          ),
+          trailing: IconButton(
+            icon: Icon(Icons.close, color: Colors.grey),
+            onPressed: () {
+              setState(() {
+                activities.removeAt(index);
+              });
             },
-            child: Text('Save'),
           ),
-        ],
+        ),
       ),
     );
-  }
+  },
+),
+                    ],
+                  ),
+                ),
+
+                // Update Button
+                Container(
+                  padding: EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    border: Border(top: BorderSide(color: Colors.grey[200]!)),
+                  ),
+                  child: ElevatedButton(
+                    onPressed: () async {
+                      if (_nameController.text.trim().isNotEmpty) {
+                        // Apply all changes at once
+                        await FirebaseFirestore.instance
+                          .collection('groups')
+                          .doc(widget.groupId)
+                          .update({
+                            'title': _nameController.text.trim(),
+                            'date': Timestamp.fromDate(selectedDate),
+                            'activities': activities,
+                          });
+                        Navigator.pop(context);
+                      }
+                    },
+                    child: Text('Update'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Color(0xFFFFC107),
+                      foregroundColor: Colors.black,
+                      minimumSize: Size(double.infinity, 50),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      }
+    ),
+  );
+}
 
 void _showDateTimePicker(BuildContext context, int index, Map<String, dynamic> activity) {
   DateTime initialDate = activity['dateTime'] != null 
@@ -1233,24 +1504,27 @@ if (rawNotes is String && rawNotes.isNotEmpty) {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     ClipRRect(
-                      borderRadius: BorderRadius.circular(8),
-                      child: SizedBox(
-                        width: 80,
-                        height: 80,
-                        child: imageUrl != null
-                          ? Image.network(
-                              imageUrl,
-                              fit: BoxFit.cover,
-                              errorBuilder: (context, error, stackTrace) => Container(
-                                color: Colors.grey[200],
-                                child: Icon(Icons.error, color: Colors.grey),
-                              ),
-                            )
-                          : Container(
-                              color: Colors.grey[200],
-                              child: Icon(Icons.image, color: Colors.grey),
-                            ),
-                      ),
+// Inside the activities map in _buildDetailsTab, update the image display:
+child: SizedBox(
+  width: 80,
+  height: 80,
+  child: ClipRRect(
+    borderRadius: BorderRadius.circular(8),
+    child: activity['photoUrl'] != null
+      ? Image.network(
+          activity['photoUrl'],
+          fit: BoxFit.cover,
+          errorBuilder: (context, error, stackTrace) => Container(
+            color: Colors.grey[200],
+            child: Icon(Icons.error, color: Colors.grey),
+          ),
+        )
+      : Container(
+          color: Colors.grey[200],
+          child: Icon(Icons.image, color: Colors.grey),
+        ),
+  ),
+),
                     ),
                     SizedBox(width: 12),
                     Expanded(
@@ -1302,107 +1576,180 @@ InkWell(
                 ),
               ),
               children: [
-                Container(
-                  decoration: BoxDecoration(
-                    border: Border(
-                      top: BorderSide(color: Colors.grey[200]!),
+// Replace the notes section in the ExpansionTile's children with:
+Container(
+  decoration: BoxDecoration(
+    border: Border(
+      top: BorderSide(color: Colors.grey[200]!),
+    ),
+  ),
+  child: Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      Padding(
+        padding: EdgeInsets.all(16),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Text(
+              'Notes',
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            TextButton.icon(
+              onPressed: () => _showAddNoteDialog(context, index, activity),
+              icon: Icon(Icons.add, size: 20),
+              label: Text('Add'),
+              style: TextButton.styleFrom(
+                foregroundColor: Colors.blue,
+                padding: EdgeInsets.symmetric(horizontal: 12),
+              ),
+            ),
+          ],
+        ),
+      ),
+/*       // Add this after the notes header and before the list/empty state
+if (notes.isNotEmpty)
+  Padding(
+    padding: EdgeInsets.only(left: 16, right: 16, bottom: 4), // Reduced padding
+    child: Text(
+      'Swipe left to delete, right to edit',
+      style: TextStyle(
+        color: Colors.grey[500],
+        fontSize: 12,
+        letterSpacing: -0.2, // Slightly tighter letter spacing
+      ),
+    ),
+  ), */
+      if (notes.isEmpty)
+        Center(
+          child: Padding(
+            padding: EdgeInsets.all(24),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(Icons.note_alt_outlined, 
+                  size: 48, 
+                  color: Colors.grey[400]
+                ),
+                SizedBox(height: 12),
+                Text(
+                  'No notes yet',
+                  style: TextStyle(
+                    color: Colors.grey[600],
+                    fontSize: 16,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+                Text(
+                  'Add notes to keep track of details',
+                  style: TextStyle(
+                    color: Colors.grey[500],
+                    fontSize: 14,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        )
+      else
+        ListView.builder(
+          shrinkWrap: true,
+          physics: NeverScrollableScrollPhysics(),
+          padding: EdgeInsets.only(top: 4),
+          itemCount: notes.length,
+          itemBuilder: (context, noteIndex) {
+            final note = notes[noteIndex];
+            DateTime noteTime = DateTime.parse(note['timestamp']);
+
+            return Dismissible(
+              key: Key('note-$noteIndex-${note['timestamp']}'),
+              background: Container(
+                padding: EdgeInsets.symmetric(horizontal: 16),
+                color: Colors.blue[100],
+                alignment: Alignment.centerLeft,
+                child: Icon(Icons.edit, color: Colors.blue),
+              ),
+              secondaryBackground: Container(
+                padding: EdgeInsets.symmetric(horizontal: 16),
+                color: Colors.red[100],
+                alignment: Alignment.centerRight,
+                child: Icon(Icons.delete, color: Colors.red),
+              ),
+              confirmDismiss: (direction) async {
+                if (direction == DismissDirection.startToEnd) {
+                  // Edit
+                  _editNote(context, index, noteIndex, note);
+                  return false;
+                } else {
+                  // Delete
+                  return await showDialog(
+                    context: context,
+                    builder: (BuildContext context) {
+                      return AlertDialog(
+                        title: Text('Delete Note'),
+                        content: Text('Are you sure you want to delete this note?'),
+                        actions: [
+                          TextButton(
+                            onPressed: () => Navigator.of(context).pop(false),
+                            child: Text('Cancel'),
+                          ),
+                          TextButton(
+                            onPressed: () {
+                              Navigator.of(context).pop(true);
+                              _deleteNote(context, index, noteIndex);
+                            },
+                            child: Text('Delete', 
+                              style: TextStyle(color: Colors.red),
+                            ),
+                          ),
+                        ],
+                      );
+                    },
+                  );
+                }
+              },
+              child: Container(
+                decoration: BoxDecoration(
+                  border: Border(
+                    bottom: BorderSide(
+                      color: Colors.grey[200]!,
+                      width: noteIndex < notes.length - 1 ? 1 : 0,
                     ),
                   ),
+                ),
+                child: Padding(
+                  padding: EdgeInsets.all(16),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Padding(
-                        padding: EdgeInsets.all(12),
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            Text(
-                              'Notes',
-                              style: TextStyle(
-                                fontSize: 16,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                            TextButton.icon(
-                              onPressed: () => _showAddNoteDialog(context, index, activity),
-                              icon: Icon(Icons.add, size: 20),
-                              label: Text('Add'),
-                              style: TextButton.styleFrom(
-                                foregroundColor: Colors.blue,
-                                padding: EdgeInsets.symmetric(horizontal: 12),
-                              ),
-                            ),
-                          ],
+                      Text(
+                        note['text'],
+                        style: TextStyle(
+                          fontSize: 15,
+                          height: 1.4,
                         ),
                       ),
-                      if (notes.isEmpty)
-                        Padding(
-                          padding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                          child: Text(
-                            'No notes added yet',
-                            style: TextStyle(color: Colors.grey[600]),
-                          ),
+                      SizedBox(height: 8),
+                      Text(
+                        DateFormat('MMM d, yyyy h:mm a').format(noteTime),
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Colors.grey[600],
                         ),
-                      ...notes.asMap().entries.map((noteEntry) {
-                        int noteIndex = noteEntry.key;
-                        Map<String, dynamic> note = noteEntry.value;
-                        DateTime noteTime = DateTime.parse(note['timestamp']);
-                        
-                        return Container(
-                          decoration: BoxDecoration(
-                            border: Border(
-                              top: noteIndex > 0 ? BorderSide(color: Colors.grey[200]!) : BorderSide.none,
-                            ),
-                          ),
-                          child: Padding(
-                            padding: EdgeInsets.all(12),
-                            child: Row(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    children: [
-                                      Text(
-                                        note['text'],
-                                        style: TextStyle(fontSize: 14),
-                                      ),
-                                      SizedBox(height: 4),
-                                      Text(
-                                        DateFormat('MMM d, yyyy h:mm a').format(noteTime),
-                                        style: TextStyle(
-                                          fontSize: 12,
-                                          color: Colors.grey[600],
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                                Row(
-                                  children: [
-                                    IconButton(
-                                      icon: Icon(Icons.edit, size: 20),
-                                      onPressed: () => _editNote(context, index, noteIndex, note),
-                                      padding: EdgeInsets.zero,
-                                      constraints: BoxConstraints(),
-                                    ),
-                                    SizedBox(width: 8),
-                                    IconButton(
-                                      icon: Icon(Icons.delete_outline, size: 20),
-                                      onPressed: () => _deleteNote(context, index, noteIndex),
-                                      padding: EdgeInsets.zero,
-                                      constraints: BoxConstraints(),
-                                    ),
-                                  ],
-                                ),
-                              ],
-                            ),
-                          ),
-                        );
-                      }).toList(),
+                      ),
                     ],
                   ),
                 ),
+              ),
+            );
+          },
+        ),
+    ],
+  ),
+),
               ],
             ),
           ),
@@ -1473,20 +1820,23 @@ Widget _buildOverviewMap(List<dynamic> activities) {
       return Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Container(
-            height: 200,
-            child: GoogleMap(
-              initialCameraPosition: CameraPosition(
-                target: center,
-                zoom: 10,
+          ClipRRect(
+            borderRadius: BorderRadius.circular(12),
+            child: Container(
+              height: 200,
+              child: GoogleMap(
+                initialCameraPosition: CameraPosition(
+                  target: center,
+                  zoom: 10,
+                ),
+                markers: markers,
+                onMapCreated: (GoogleMapController controller) {
+                  controller.animateCamera(CameraUpdate.newLatLngBounds(bounds, 50));
+                },
+                zoomControlsEnabled: false,
+                mapToolbarEnabled: false,
+                myLocationButtonEnabled: false,
               ),
-              markers: markers,
-              onMapCreated: (GoogleMapController controller) {
-                controller.animateCamera(CameraUpdate.newLatLngBounds(bounds, 50));
-              },
-              zoomControlsEnabled: false,
-              mapToolbarEnabled: false,
-              myLocationButtonEnabled: false,
             ),
           ),
           SizedBox(height: 16), // Keep some spacing between map and next element
@@ -3196,52 +3546,59 @@ class _ActivityBottomSheetState extends State<ActivityBottomSheet> {
     return fullAddress.split(',')[0].trim();
   }
 
-  Future<void> _addActivity(BuildContext context) async {
-    if (_selectedPrediction != null) {
-      var result = await widget.googlePlace.details.get(_selectedPrediction!.placeId ?? '');
-      Map<String, double>? location;
-      
-      if (result?.result?.geometry?.location != null) {
-        location = {
-          'lat': result!.result!.geometry!.location!.lat!,
-          'lng': result.result!.geometry!.location!.lng!
-        };
-      }
-
-      DateTime? dateTime;
-      if (_selectedDate != null && _selectedTime != null) {
-        dateTime = DateTime(
-          _selectedDate!.year,
-          _selectedDate!.month,
-          _selectedDate!.day,
-          _selectedTime!.hour,
-          _selectedTime!.minute,
-        );
-      }
-
-// In the _addActivity method of ActivityBottomSheet, replace the activity creation with:
-final activity = Activity(
-  name: _extractPlaceName(_selectedAddress!),
-  description: _descriptionController.text.trim(),
-  placeDescription: _selectedAddress,
-  location: location,
-  notes: [
-    {
-      'text': _notesController.text.trim(),
-      'timestamp': DateTime.now().toIso8601String(),
+Future<void> _addActivity(BuildContext context) async {
+  if (_selectedPrediction != null) {
+    var result = await widget.googlePlace.details.get(_selectedPrediction!.placeId ?? '');
+    Map<String, double>? location;
+    String? photoUrl;
+    
+    if (result?.result?.geometry?.location != null) {
+      location = {
+        'lat': result!.result!.geometry!.location!.lat!,
+        'lng': result!.result!.geometry!.location!.lng!
+      };
     }
-  ],
-  dateTime: dateTime,
-);
 
-      widget.onActivityAdded(activity);
-      Navigator.pop(context);
-      
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Added ${activity.name}'), duration: Duration(seconds: 2)),
+    // Get the first photo from Google Places API
+    if (result?.result?.photos != null && result!.result!.photos!.isNotEmpty) {
+      String photoReference = result.result!.photos![0].photoReference!;
+      photoUrl = 'https://maps.googleapis.com/maps/api/place/photo?maxwidth=800&photo_reference=$photoReference&key=AIzaSyCrQnPUOQ6ho_LItD4mC1yRFcA0SEWKYBM';
+    }
+
+    DateTime? dateTime;
+    if (_selectedDate != null && _selectedTime != null) {
+      dateTime = DateTime(
+        _selectedDate!.year,
+        _selectedDate!.month,
+        _selectedDate!.day,
+        _selectedTime!.hour,
+        _selectedTime!.minute,
       );
     }
+
+    final activity = Activity(
+      name: _extractPlaceName(_selectedAddress!),
+      description: _descriptionController.text.trim(),
+      placeDescription: _selectedAddress,
+      location: location,
+      photoUrl: photoUrl,  // Add the photo URL
+      notes: [
+        {
+          'text': _notesController.text.trim(),
+          'timestamp': DateTime.now().toIso8601String(),
+        }
+      ],
+      dateTime: dateTime,
+    );
+
+    widget.onActivityAdded(activity);
+    Navigator.pop(context);
+    
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('Added ${activity.name}'), duration: Duration(seconds: 2)),
+    );
   }
+}
 }
 
 class Activity {
@@ -3249,8 +3606,8 @@ class Activity {
   final String description;
   final String? placeDescription;
   final Map<String, double>? location;
-  final String? imageUrl;
-  final List<Map<String, dynamic>> notes;  // Changed from String? to List
+  final String? photoUrl;  // Add this field
+  final List<Map<String, dynamic>> notes;
   final DateTime? dateTime;
   final Key key;
 
@@ -3259,8 +3616,8 @@ class Activity {
     this.description = '',
     this.placeDescription,
     this.location,
-    this.imageUrl,
-    this.notes = const [],  // Default empty list
+    this.photoUrl,  // Add this parameter
+    this.notes = const [],
     this.dateTime,
   }) : key = UniqueKey();
 
@@ -3270,7 +3627,7 @@ class Activity {
       'description': description,
       'placeDescription': placeDescription,
       'location': location,
-      'imageUrl': imageUrl,
+      'photoUrl': photoUrl,  // Include in the map
       'notes': notes,
       'dateTime': dateTime?.toIso8601String(),
     };
