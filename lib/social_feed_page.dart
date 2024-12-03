@@ -56,8 +56,8 @@ class _SocialFeedPageState extends State<SocialFeedPage> with SingleTickerProvid
         bottom: TabBar(
           controller: _tabController,
           tabs: [
-            Tab(text: 'Upcoming Trips'),
-            Tab(text: 'Memories'),
+            Tab(text: 'Discover Trips'),
+            Tab(text: 'Your Trips'),
           ],
           labelColor: Colors.black,
           unselectedLabelColor: Colors.grey,
@@ -66,14 +66,14 @@ class _SocialFeedPageState extends State<SocialFeedPage> with SingleTickerProvid
       body: TabBarView(
         controller: _tabController,
         children: [
-          _buildUpcomingTrips(),
-          _buildMemories(),
+          _buildDiscoverTrips(),
+          _buildYourTrips(),
         ],
       ),
     );
   }
 
-  Widget _buildUpcomingTrips() {
+  Widget _buildDiscoverTrips() {
     return FutureBuilder<List<String>>(
       future: _getMutualFriends(),
       builder: (context, friendsSnapshot) {
@@ -104,16 +104,33 @@ class _SocialFeedPageState extends State<SocialFeedPage> with SingleTickerProvid
               return Center(child: CircularProgressIndicator());
             }
 
-            if (snapshot.data!.docs.isEmpty) {
-              return Center(child: Text('No upcoming trips.'));
+            // Filter out posts where the current user is already a member
+            var posts = snapshot.data!.docs.where((doc) {
+              List<String> groupMembers = List<String>.from(doc['groupMembers'] ?? []);
+              return !groupMembers.contains(currentUserId);
+            }).toList();
+
+            if (posts.isEmpty) {
+              return Center(
+                child: Padding(
+                  padding: EdgeInsets.all(16),
+                  child: Text(
+                    'No new trips to discover right now.\nCheck back later for more adventures!',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      fontSize: 16,
+                      color: Colors.grey[600],
+                    ),
+                  ),
+                ),
+              );
             }
 
             return ListView.separated(
-              itemCount: snapshot.data!.docs.length,
+              itemCount: posts.length,
               separatorBuilder: (context, index) => Divider(height: 1, color: Colors.grey[300]),
               itemBuilder: (context, index) {
-                var post = snapshot.data!.docs[index];
-                return SocialPostCard(post: post);
+                return SocialPostCard(post: posts[index]);
               },
             );
           },
@@ -122,54 +139,45 @@ class _SocialFeedPageState extends State<SocialFeedPage> with SingleTickerProvid
     );
   }
 
-  Widget _buildMemories() {
-    return FutureBuilder<List<String>>(
-      future: _getMutualFriends(),
-      builder: (context, friendsSnapshot) {
-        if (friendsSnapshot.connectionState == ConnectionState.waiting) {
-          return Center(child: CircularProgressIndicator());
-        }
+Widget _buildYourTrips() {
+  return StreamBuilder<QuerySnapshot>(
+    stream: FirebaseFirestore.instance
+        .collection('social_posts')
+        .where('groupMembers', arrayContains: currentUserId)
+        .orderBy('timestamp', descending: true)
+        .snapshots(),
+    builder: (context, snapshot) {
+      if (snapshot.hasError) {
+        return Center(child: Text('Error: ${snapshot.error}'));
+      }
 
-        if (friendsSnapshot.hasError) {
-          return Center(child: Text('Error: ${friendsSnapshot.error}'));
-        }
+      if (snapshot.connectionState == ConnectionState.waiting) {
+        return Center(child: CircularProgressIndicator());
+      }
 
-        List<String> mutualFriends = friendsSnapshot.data ?? [];
-        mutualFriends.add(currentUserId);
+      var posts = snapshot.data!.docs;
 
-        return StreamBuilder<QuerySnapshot>(
-          stream: FirebaseFirestore.instance
-              .collection('social_posts')
-              .where('sharedBy', whereIn: mutualFriends)
-              .where('isCompleted', isEqualTo: true)
-              .orderBy('timestamp', descending: true)
-              .snapshots(),
-          builder: (context, snapshot) {
-            if (snapshot.hasError) {
-              return Center(child: Text('Error: ${snapshot.error}'));
-            }
-
-            if (snapshot.connectionState == ConnectionState.waiting) {
-              return Center(child: CircularProgressIndicator());
-            }
-
-            if (snapshot.data!.docs.isEmpty) {
-              return Center(child: Text('No memories yet.'));
-            }
-
-            return ListView.separated(
-              itemCount: snapshot.data!.docs.length,
-              separatorBuilder: (context, index) => Divider(height: 1, color: Colors.grey[300]),
-              itemBuilder: (context, index) {
-                var post = snapshot.data!.docs[index];
-                return SocialPostCard(post: post);
-              },
-            );
-          },
+      if (posts.isEmpty) {
+        return Center(
+          child: Padding(
+            padding: EdgeInsets.all(16),
+            child: Text(
+              'You haven\'t joined any trips yet.\nDiscover and join some trips to see them here!',
+              textAlign: TextAlign.center,
+              style: TextStyle(fontSize: 16, color: Colors.grey[600]),
+            ),
+          ),
         );
-      },
-    );
-  }
+      }
+
+      return ListView.separated(
+        itemCount: posts.length,
+        separatorBuilder: (context, index) => Divider(height: 1, color: Colors.grey[300]),
+        itemBuilder: (context, index) => SocialPostCard(post: posts[index]),
+      );
+    },
+  );
+}
 
   Future<List<String>> _getMutualFriends() async {
     DocumentSnapshot userDoc = await FirebaseFirestore.instance
@@ -562,21 +570,21 @@ Future<void> _joinGroup(BuildContext context, String groupId) async {
       DocumentReference groupRef = FirebaseFirestore.instance.collection('groups').doc(groupId);
       DocumentReference postRef = post.reference;
       
+      // Read documents to ensure they exist and initialize arrays if needed
       DocumentSnapshot groupSnap = await transaction.get(groupRef);
       DocumentSnapshot postSnap = await transaction.get(postRef);
       
-      List<String> groupMembers = List<String>.from(groupSnap['members'] ?? []);
-      List<String> postMembers = List<String>.from(postSnap['groupMembers'] ?? []);
-      
-      if (!groupMembers.contains(currentUserId)) {
-        groupMembers.add(currentUserId);
-        transaction.update(groupRef, {'members': groupMembers});
+      if (!groupSnap.exists || !postSnap.exists) {
+        throw Exception('Group or post not found');
       }
+
+      transaction.update(groupRef, {
+        'members': FieldValue.arrayUnion([currentUserId])
+      });
       
-      if (!postMembers.contains(currentUserId)) {
-        postMembers.add(currentUserId);
-        transaction.update(postRef, {'groupMembers': postMembers});
-      }
+      transaction.update(postRef, {
+        'groupMembers': FieldValue.arrayUnion([currentUserId])
+      });
     });
 
     ScaffoldMessenger.of(context).showSnackBar(

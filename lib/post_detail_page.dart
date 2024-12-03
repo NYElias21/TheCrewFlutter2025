@@ -240,7 +240,6 @@ Future<void> _toggleLike(String postId) async {
 
 Future<void> _sharePost() async {
   String caption = '';
-  bool isGroupActivity = false;
   await _trendingService.incrementEngagement(widget.post.id, 'shares');
 
   showModalBottomSheet(
@@ -250,12 +249,10 @@ Future<void> _sharePost() async {
     builder: (BuildContext context) {
       return StatefulBuilder(
         builder: (context, setState) {
-          // Get the keyboard height and safe area
           final keyboardHeight = MediaQuery.of(context).viewInsets.bottom;
           final safePadding = MediaQuery.of(context).padding;
 
           return GestureDetector(
-            // Dismiss keyboard when tapping outside of text field
             onTap: () => FocusScope.of(context).unfocus(),
             child: Container(
               height: MediaQuery.of(context).size.height * 0.85,
@@ -265,7 +262,6 @@ Future<void> _sharePost() async {
               ),
               child: Column(
                 children: [
-                  // Drag Handle
                   Container(
                     margin: EdgeInsets.only(top: 12),
                     width: 40,
@@ -276,14 +272,13 @@ Future<void> _sharePost() async {
                     ),
                   ),
                   
-                  // Header
                   Padding(
                     padding: EdgeInsets.all(16),
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
                         Text(
-                          'Share this experience',
+                          'Create a Group Trip',
                           style: TextStyle(
                             fontSize: 20,
                             fontWeight: FontWeight.bold,
@@ -299,17 +294,14 @@ Future<void> _sharePost() async {
                   
                   Divider(height: 1),
                   
-                  // Scrollable Content
                   Expanded(
                     child: SingleChildScrollView(
                       padding: EdgeInsets.all(16),
-                      // Add padding to account for keyboard
                       child: Padding(
                         padding: EdgeInsets.only(bottom: keyboardHeight),
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            // Post Preview
                             Container(
                               decoration: BoxDecoration(
                                 borderRadius: BorderRadius.circular(12),
@@ -357,9 +349,8 @@ Future<void> _sharePost() async {
                             ),
                             SizedBox(height: 24),
                             
-                            // Caption Section
                             Text(
-                              'Add your thoughts',
+                              'Share a message with your friends',
                               style: TextStyle(
                                 fontSize: 16,
                                 fontWeight: FontWeight.w600,
@@ -369,7 +360,7 @@ Future<void> _sharePost() async {
                             TextField(
                               onChanged: (value) => caption = value,
                               decoration: InputDecoration(
-                                hintText: 'Write a caption...',
+                                hintText: 'Write a message...',
                                 hintStyle: TextStyle(color: Colors.grey[500]),
                                 filled: true,
                                 fillColor: Colors.grey[100],
@@ -384,61 +375,10 @@ Future<void> _sharePost() async {
                               ),
                               maxLines: 3,
                               style: TextStyle(fontSize: 16),
-                              // Add keyboard actions
                               textInputAction: TextInputAction.done,
                               onEditingComplete: () {
                                 FocusScope.of(context).unfocus();
                               },
-                            ),
-                            SizedBox(height: 24),
-                            
-                            // Group Activity Section
-                            Text(
-                              'Activity Settings',
-                              style: TextStyle(
-                                fontSize: 16,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                            SizedBox(height: 12),
-                            Container(
-                              decoration: BoxDecoration(
-                                borderRadius: BorderRadius.circular(12),
-                                color: Colors.grey[100],
-                              ),
-                              padding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                              child: Row(
-                                children: [
-                                  Expanded(
-                                    child: Column(
-                                      crossAxisAlignment: CrossAxisAlignment.start,
-                                      children: [
-                                        Text(
-                                          'Allow friends to join',
-                                          style: TextStyle(
-                                            fontWeight: FontWeight.w500,
-                                            fontSize: 16,
-                                          ),
-                                        ),
-                                        Text(
-                                          'Create a group activity others can join',
-                                          style: TextStyle(
-                                            color: Colors.grey[600],
-                                            fontSize: 14,
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                  Switch(
-                                    value: isGroupActivity,
-                                    onChanged: (value) {
-                                      setState(() => isGroupActivity = value);
-                                    },
-                                    activeColor: Colors.blue,
-                                  ),
-                                ],
-                              ),
                             ),
                           ],
                         ),
@@ -446,7 +386,6 @@ Future<void> _sharePost() async {
                     ),
                   ),
                   
-                  // Bottom Action Bar
                   Container(
                     padding: EdgeInsets.fromLTRB(16, 16, 16, 16 + safePadding.bottom),
                     decoration: BoxDecoration(
@@ -461,11 +400,11 @@ Future<void> _sharePost() async {
                     child: SafeArea(
                       child: ElevatedButton(
                         onPressed: () {
-                          _saveSharedPost(caption, isGroupActivity);
+                          _saveSharedPost(caption);
                           Navigator.of(context).pop();
                         },
                         child: Text(
-                          'Share',
+                          'Create Group',
                           style: TextStyle(
                             fontSize: 16,
                             fontWeight: FontWeight.bold,
@@ -492,24 +431,19 @@ Future<void> _sharePost() async {
     },
   );
 }
-
 // In post_detail_page.dart, modify the _saveSharedPost function:
 
-void _saveSharedPost(String caption, bool isGroupActivity) async {
+void _saveSharedPost(String caption) async {
   final googlePlace = GooglePlace('AIzaSyCrQnPUOQ6ho_LItD4mC1yRFcA0SEWKYBM');
   
   try {
     final data = widget.post.data() as Map<String, dynamic>;
-    String groupId = '';
 
     List<Map<String, dynamic>> processedActivities = [];
     if (data['activities'] != null) {
       for (var activity in data['activities']) {
         Map<String, dynamic> processedActivity = Map<String, dynamic>.from(activity);
         
-        print("Processing activity: ${activity['name']}");
-        
-        // Handle location data
         if (activity['location'] != null) {
           if (activity['location'] is GeoPoint) {
             GeoPoint geoPoint = activity['location'];
@@ -523,66 +457,44 @@ void _saveSharedPost(String caption, bool isGroupActivity) async {
           }
         }
 
-        // Try to get photo using either existing photo URL, place ID, or search
         if (activity['photoUrl'] != null) {
           processedActivity['photoUrl'] = activity['photoUrl'];
-          print("Using existing photoUrl: ${activity['photoUrl']}");
-        } else {
-          // Try to search for the place if we have a place description
-          if (activity['placeDescription'] != null) {
-            print("Searching for place: ${activity['placeDescription']}");
-            var searchResult = await googlePlace.search.getTextSearch(
-              activity['placeDescription'],
-              language: 'en',
-              region: 'us'
-            );
+        } else if (activity['placeDescription'] != null) {
+          var searchResult = await googlePlace.search.getTextSearch(
+            activity['placeDescription'],
+            language: 'en',
+            region: 'us'
+          );
 
-            if (searchResult?.results != null && searchResult!.results!.isNotEmpty) {
-              String? placeId = searchResult.results!.first.placeId;
-              print("Found placeId: $placeId");
-              
-              if (placeId != null) {
-                var details = await googlePlace.details.get(
-                  placeId,
-                  fields: 'photos'
-                );
-                
-                if (details?.result?.photos != null && details!.result!.photos!.isNotEmpty) {
-                  String photoReference = details.result!.photos![0].photoReference!;
-                  String photoUrl = 'https://maps.googleapis.com/maps/api/place/photo?maxwidth=800&photo_reference=$photoReference&key=AIzaSyCrQnPUOQ6ho_LItD4mC1yRFcA0SEWKYBM';
-                  processedActivity['photoUrl'] = photoUrl;
-                  print("Added new photoUrl: $photoUrl");
-                } else {
-                  print("No photos found for place");
-                }
+          if (searchResult?.results != null && searchResult!.results!.isNotEmpty) {
+            String? placeId = searchResult.results!.first.placeId;
+            if (placeId != null) {
+              var details = await googlePlace.details.get(placeId, fields: 'photos');
+              if (details?.result?.photos != null && details!.result!.photos!.isNotEmpty) {
+                String photoReference = details.result!.photos![0].photoReference!;
+                String photoUrl = 'https://maps.googleapis.com/maps/api/place/photo?maxwidth=800&photo_reference=$photoReference&key=AIzaSyCrQnPUOQ6ho_LItD4mC1yRFcA0SEWKYBM';
+                processedActivity['photoUrl'] = photoUrl;
               }
-            } else {
-              print("No place found for description: ${activity['placeDescription']}");
             }
           }
         }
-        
         processedActivities.add(processedActivity);
       }
     }
 
-    if (isGroupActivity) {
-      print("Creating new group with ${processedActivities.length} activities");
-      
-      DocumentReference groupRef = await FirebaseFirestore.instance.collection('groups').add({
-        'title': data['title'],
-        'description': data['description'],
-        'imageUrls': data['imageUrls'],
-        'members': [FirebaseAuth.instance.currentUser!.uid],
-        'createdAt': FieldValue.serverTimestamp(),
-        'originalPostId': widget.post.id,
-        'postType': data['postType'],
-        'itinerary': data['itinerary'],
-        'activities': processedActivities,
-        'date': null,
-      });
-      groupId = groupRef.id;
-    }
+    // Always create a group
+    DocumentReference groupRef = await FirebaseFirestore.instance.collection('groups').add({
+      'title': data['title'],
+      'description': data['description'],
+      'imageUrls': data['imageUrls'],
+      'members': [FirebaseAuth.instance.currentUser!.uid],
+      'createdAt': FieldValue.serverTimestamp(),
+      'originalPostId': widget.post.id,
+      'postType': data['postType'],
+      'itinerary': data['itinerary'],
+      'activities': processedActivities,
+      'date': null,
+    });
 
     final sharedPostData = {
       'originalPostId': widget.post.id,
@@ -595,23 +507,22 @@ void _saveSharedPost(String caption, bool isGroupActivity) async {
       'postType': data['postType'],
       'itinerary': data['itinerary'],
       'activities': processedActivities,
-      'isGroupActivity': isGroupActivity,
-      'groupId': isGroupActivity ? groupId : null,
-      'groupMembers': isGroupActivity ? [FirebaseAuth.instance.currentUser!.uid] : [],
+      'isGroupActivity': true, // Always true
+      'groupId': groupRef.id,
+      'groupMembers': [FirebaseAuth.instance.currentUser!.uid],
       'likes': 0,
       'comments': 0,
       'isCompleted': false,
     };
 
     await FirebaseFirestore.instance.collection('social_posts').add(sharedPostData);
-
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('Post shared successfully!')),
+      SnackBar(content: Text('Group created successfully!')),
     );
   } catch (e) {
-    print('Error sharing post: $e');
+    print('Error creating group: $e');
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('Error sharing post. Please try again.')),
+      SnackBar(content: Text('Error creating group. Please try again.')),
     );
   }
 }
@@ -1780,9 +1691,9 @@ Padding(
 ),
                 ],
               ),
-              GestureDetector(
-                onTap: _sharePost,
-                child: Icon(Icons.share, size: 28),
+GestureDetector(
+    onTap: _sharePost,
+    child: Icon(Icons.share, size: 28),
               ),
             ],
           ),
