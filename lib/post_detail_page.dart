@@ -496,17 +496,20 @@ Future<void> _sharePost() async {
 // In post_detail_page.dart, modify the _saveSharedPost function:
 
 void _saveSharedPost(String caption, bool isGroupActivity) async {
+  final googlePlace = GooglePlace('AIzaSyCrQnPUOQ6ho_LItD4mC1yRFcA0SEWKYBM');
+  
   try {
     final data = widget.post.data() as Map<String, dynamic>;
     String groupId = '';
 
-    // Process activities and ensure photos are properly carried over
     List<Map<String, dynamic>> processedActivities = [];
     if (data['activities'] != null) {
       for (var activity in data['activities']) {
         Map<String, dynamic> processedActivity = Map<String, dynamic>.from(activity);
         
-        // Ensure location data is properly structured
+        print("Processing activity: ${activity['name']}");
+        
+        // Handle location data
         if (activity['location'] != null) {
           if (activity['location'] is GeoPoint) {
             GeoPoint geoPoint = activity['location'];
@@ -520,17 +523,42 @@ void _saveSharedPost(String caption, bool isGroupActivity) async {
           }
         }
 
-        // If there's already a photoUrl, keep it
-        if (!activity.containsKey('photoUrl') && activity['placeId'] != null) {
-          var result = await googlePlace.details.get(
-            activity['placeId'],
-            fields: 'photos'
-          );
-          
-          if (result?.result?.photos != null && result!.result!.photos!.isNotEmpty) {
-            String photoReference = result.result!.photos![0].photoReference!;
-            String photoUrl = 'https://maps.googleapis.com/maps/api/place/photo?maxwidth=800&photo_reference=$photoReference&key=AIzaSyCrQnPUOQ6ho_LItD4mC1yRFcA0SEWKYBM';
-            processedActivity['photoUrl'] = photoUrl;
+        // Try to get photo using either existing photo URL, place ID, or search
+        if (activity['photoUrl'] != null) {
+          processedActivity['photoUrl'] = activity['photoUrl'];
+          print("Using existing photoUrl: ${activity['photoUrl']}");
+        } else {
+          // Try to search for the place if we have a place description
+          if (activity['placeDescription'] != null) {
+            print("Searching for place: ${activity['placeDescription']}");
+            var searchResult = await googlePlace.search.getTextSearch(
+              activity['placeDescription'],
+              language: 'en',
+              region: 'us'
+            );
+
+            if (searchResult?.results != null && searchResult!.results!.isNotEmpty) {
+              String? placeId = searchResult.results!.first.placeId;
+              print("Found placeId: $placeId");
+              
+              if (placeId != null) {
+                var details = await googlePlace.details.get(
+                  placeId,
+                  fields: 'photos'
+                );
+                
+                if (details?.result?.photos != null && details!.result!.photos!.isNotEmpty) {
+                  String photoReference = details.result!.photos![0].photoReference!;
+                  String photoUrl = 'https://maps.googleapis.com/maps/api/place/photo?maxwidth=800&photo_reference=$photoReference&key=AIzaSyCrQnPUOQ6ho_LItD4mC1yRFcA0SEWKYBM';
+                  processedActivity['photoUrl'] = photoUrl;
+                  print("Added new photoUrl: $photoUrl");
+                } else {
+                  print("No photos found for place");
+                }
+              }
+            } else {
+              print("No place found for description: ${activity['placeDescription']}");
+            }
           }
         }
         
@@ -539,7 +567,8 @@ void _saveSharedPost(String caption, bool isGroupActivity) async {
     }
 
     if (isGroupActivity) {
-      // Create a new group document with processed activities
+      print("Creating new group with ${processedActivities.length} activities");
+      
       DocumentReference groupRef = await FirebaseFirestore.instance.collection('groups').add({
         'title': data['title'],
         'description': data['description'],
@@ -549,7 +578,7 @@ void _saveSharedPost(String caption, bool isGroupActivity) async {
         'originalPostId': widget.post.id,
         'postType': data['postType'],
         'itinerary': data['itinerary'],
-        'activities': processedActivities,  // Use processed activities
+        'activities': processedActivities,
         'date': null,
       });
       groupId = groupRef.id;
@@ -565,7 +594,7 @@ void _saveSharedPost(String caption, bool isGroupActivity) async {
       'imageUrls': data['imageUrls'],
       'postType': data['postType'],
       'itinerary': data['itinerary'],
-      'activities': processedActivities,  // Use processed activities
+      'activities': processedActivities,
       'isGroupActivity': isGroupActivity,
       'groupId': isGroupActivity ? groupId : null,
       'groupMembers': isGroupActivity ? [FirebaseAuth.instance.currentUser!.uid] : [],

@@ -1510,18 +1510,34 @@ child: SizedBox(
   height: 80,
   child: ClipRRect(
     borderRadius: BorderRadius.circular(8),
-    child: activity['photoUrl'] != null
+    child: activity['photoUrl'] != null && activity['photoUrl'].toString().isNotEmpty
       ? Image.network(
           activity['photoUrl'],
           fit: BoxFit.cover,
-          errorBuilder: (context, error, stackTrace) => Container(
-            color: Colors.grey[200],
-            child: Icon(Icons.error, color: Colors.grey),
-          ),
+          loadingBuilder: (context, child, loadingProgress) {
+            if (loadingProgress == null) return child;
+            return Container(
+              color: Colors.grey[200],
+              child: Center(
+                child: CircularProgressIndicator(
+                  value: loadingProgress.expectedTotalBytes != null 
+                    ? loadingProgress.cumulativeBytesLoaded / loadingProgress.expectedTotalBytes!
+                    : null,
+                ),
+              ),
+            );
+          },
+          errorBuilder: (context, error, stackTrace) {
+            print('Error loading activity image: $error for URL: ${activity['photoUrl']}');
+            return Container(
+              color: Colors.grey[200],
+              child: Icon(Icons.image, color: Colors.grey[600], size: 24),
+            );
+          },
         )
       : Container(
           color: Colors.grey[200],
-          child: Icon(Icons.image, color: Colors.grey),
+          child: Icon(Icons.image, color: Colors.grey[600], size: 24),
         ),
   ),
 ),
@@ -3559,10 +3575,13 @@ Future<void> _addActivity(BuildContext context) async {
       };
     }
 
-    // Get the first photo from Google Places API
+    // Get photo URL and add logging
     if (result?.result?.photos != null && result!.result!.photos!.isNotEmpty) {
       String photoReference = result.result!.photos![0].photoReference!;
       photoUrl = 'https://maps.googleapis.com/maps/api/place/photo?maxwidth=800&photo_reference=$photoReference&key=AIzaSyCrQnPUOQ6ho_LItD4mC1yRFcA0SEWKYBM';
+      print('Generated photo URL: $photoUrl'); // Add this debug line
+    } else {
+      print('No photos available for this place');
     }
 
     DateTime? dateTime;
@@ -3581,7 +3600,7 @@ Future<void> _addActivity(BuildContext context) async {
       description: _descriptionController.text.trim(),
       placeDescription: _selectedAddress,
       location: location,
-      photoUrl: photoUrl,  // Add the photo URL
+      photoUrl: photoUrl,
       notes: [
         {
           'text': _notesController.text.trim(),
@@ -3591,6 +3610,8 @@ Future<void> _addActivity(BuildContext context) async {
       dateTime: dateTime,
     );
 
+    print('Adding activity with data: ${activity.toMap()}'); // Add this debug line
+    
     widget.onActivityAdded(activity);
     Navigator.pop(context);
     
