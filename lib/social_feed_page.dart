@@ -546,18 +546,28 @@ Widget _buildGroupMembersSection(BuildContext context, List<String> postGroupMem
 
 Future<bool> _checkGroupMembership(String groupId) async {
   try {
-    // Check membership in both group and social post
+    // Get both current and historical membership data
+    DocumentSnapshot socialPost = await FirebaseFirestore.instance
+        .collection('social_posts')
+        .doc(post.id)
+        .get();
+    
     DocumentSnapshot groupDoc = await FirebaseFirestore.instance
         .collection('groups')
         .doc(groupId)
         .get();
+
+    // If either document doesn't exist, user is not a member
+    if (!socialPost.exists || !groupDoc.exists) return false;
+
+    Map<String, dynamic> groupData = groupDoc.data() as Map<String, dynamic>;
+    Map<String, dynamic> postData = socialPost.data() as Map<String, dynamic>;
+
+    // Check active members
+    List<String> groupMembers = List<String>.from(groupData['members'] ?? []);
     
-    if (!groupDoc.exists) return false;
-
-    List<String> groupMembers = List<String>.from(groupDoc['members'] ?? []);
-    List<String> postMembers = List<String>.from((post.data() as Map<String, dynamic>)['groupMembers'] ?? []);
-
-    return groupMembers.contains(currentUserId) || postMembers.contains(currentUserId);
+    // Check if user is currently a member
+    return groupMembers.contains(currentUserId);
   } catch (e) {
     print('Error checking group membership: $e');
     return false;

@@ -189,12 +189,59 @@ Widget build(BuildContext context) {
                     icon: Icon(Icons.edit, color: Colors.white),
                     onPressed: () => _editPlan(groupData),
                   ),
-                  IconButton(
-                    icon: Icon(Icons.notifications, color: Colors.white),
-                    onPressed: () {
-                      // TODO: Implement notification functionality
-                    },
-                  ),
+IconButton(
+  icon: Icon(Icons.more_vert, color: Colors.white),
+  onPressed: () {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (context) => Container(
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              margin: EdgeInsets.only(top: 8),
+              width: 40,
+              height: 4,
+              decoration: BoxDecoration(
+                color: Colors.grey[300],
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            ListTile(
+              leading: Icon(Icons.people_outline),
+              title: Text('Group Members'),
+              onTap: () {
+                Navigator.pop(context);
+                _showAllMembers(context, groupData['members'] ?? []);
+              },
+            ),
+            ListTile(
+              leading: Icon(Icons.edit_outlined),
+              title: Text('Edit Group'),
+              onTap: () {
+                Navigator.pop(context);
+                _editPlan(groupData);
+              },
+            ),
+            ListTile(
+              leading: Icon(Icons.exit_to_app, color: Colors.red),
+              title: Text('Leave Group', style: TextStyle(color: Colors.red)),
+              onTap: () {
+                Navigator.pop(context);
+                _showLeaveGroupDialog();
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  },
+),
                 ],
               ),
 SliverToBoxAdapter(
@@ -357,6 +404,68 @@ Widget _buildAvatarFromData(Map<String, dynamic> userData, String userId) {
         child: photoUrl.isEmpty ? Text(name[0].toUpperCase()) : null,
       ),
     ),
+  );
+}
+
+void _showLeaveGroupDialog() {
+  showDialog(
+    context: context,
+    builder: (BuildContext context) {
+      return AlertDialog(
+        title: Text('Leave Group'),
+        content: Text('Are you sure you want to leave this group?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text('Cancel'),
+          ),
+          TextButton(
+            style: TextButton.styleFrom(foregroundColor: Colors.red),
+            onPressed: () async {
+              try {
+                final String userId = FirebaseAuth.instance.currentUser!.uid;
+                
+                // Start a batch write
+                WriteBatch batch = FirebaseFirestore.instance.batch();
+                
+                // Remove user from group members
+                DocumentReference groupRef = FirebaseFirestore.instance
+                    .collection('groups')
+                    .doc(widget.groupId);
+                    
+                batch.update(groupRef, {
+                  'members': FieldValue.arrayRemove([userId])
+                });
+                
+                // Remove group from user's groups
+                DocumentReference userRef = FirebaseFirestore.instance
+                    .collection('users')
+                    .doc(userId);
+                    
+                batch.update(userRef, {
+                  'groups': FieldValue.arrayRemove([widget.groupId])
+                });
+                
+                // Commit the batch
+                await batch.commit();
+                
+                Navigator.pop(context);  // Close dialog
+                Navigator.pop(context);  // Return to previous screen
+                
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text('You have left the group'))
+                );
+              } catch (e) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text('Error leaving group: $e'))
+                );
+              }
+            },
+            child: Text('Leave'),
+          ),
+        ],
+      );
+    },
   );
 }
 
