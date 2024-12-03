@@ -143,7 +143,6 @@ Widget _buildYourTrips() {
   return StreamBuilder<QuerySnapshot>(
     stream: FirebaseFirestore.instance
         .collection('social_posts')
-        .where('groupMembers', arrayContains: currentUserId)
         .orderBy('timestamp', descending: true)
         .snapshots(),
     builder: (context, snapshot) {
@@ -155,25 +154,54 @@ Widget _buildYourTrips() {
         return Center(child: CircularProgressIndicator());
       }
 
-      var posts = snapshot.data!.docs;
+      // Filter posts where user is an active member in the group
+      return FutureBuilder<List<bool>>(
+        future: Future.wait(
+          snapshot.data!.docs.map((post) async {
+            String groupId = (post.data() as Map<String, dynamic>)['groupId'] ?? post.id;
+            DocumentSnapshot groupDoc = await FirebaseFirestore.instance
+                .collection('groups')
+                .doc(groupId)
+                .get();
+            
+            if (groupDoc.exists) {
+              List<String> groupMembers = List<String>.from(groupDoc['members'] ?? []);
+              return groupMembers.contains(currentUserId);
+            }
+            return false;
+          }),
+        ),
+        builder: (context, membershipSnapshot) {
+          if (membershipSnapshot.connectionState == ConnectionState.waiting) {
+            return Center(child: CircularProgressIndicator());
+          }
 
-      if (posts.isEmpty) {
-        return Center(
-          child: Padding(
-            padding: EdgeInsets.all(16),
-            child: Text(
-              'You haven\'t joined any trips yet.\nDiscover and join some trips to see them here!',
-              textAlign: TextAlign.center,
-              style: TextStyle(fontSize: 16, color: Colors.grey[600]),
-            ),
-          ),
-        );
-      }
+          List<QueryDocumentSnapshot> posts = [];
+          for (int i = 0; i < snapshot.data!.docs.length; i++) {
+            if (membershipSnapshot.data?[i] ?? false) {
+              posts.add(snapshot.data!.docs[i]);
+            }
+          }
 
-      return ListView.separated(
-        itemCount: posts.length,
-        separatorBuilder: (context, index) => Divider(height: 1, color: Colors.grey[300]),
-        itemBuilder: (context, index) => SocialPostCard(post: posts[index]),
+          if (posts.isEmpty) {
+            return Center(
+              child: Padding(
+                padding: EdgeInsets.all(16),
+                child: Text(
+                  'You haven\'t joined any trips yet.\nDiscover and join some trips to see them here!',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(fontSize: 16, color: Colors.grey[600]),
+                ),
+              ),
+            );
+          }
+
+          return ListView.separated(
+            itemCount: posts.length,
+            separatorBuilder: (context, index) => Divider(height: 1, color: Colors.grey[300]),
+            itemBuilder: (context, index) => SocialPostCard(post: posts[index]),
+          );
+        },
       );
     },
   );
