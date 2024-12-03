@@ -727,7 +727,6 @@ void _showDatePicker(BuildContext context, DateTime? currentDate) {
 }
 
 void _editPlan(Map<String, dynamic> groupData) {
-  // Create local variables to track changes
   DateTime selectedDate = groupData['date'] != null 
       ? (groupData['date'] as Timestamp).toDate()
       : DateTime.now();
@@ -740,48 +739,45 @@ void _editPlan(Map<String, dynamic> groupData) {
     backgroundColor: Colors.transparent,
     builder: (context) => StatefulBuilder(
       builder: (BuildContext context, StateSetter setState) {
-        return DraggableScrollableSheet(
-          initialChildSize: 0.9,
-          minChildSize: 0.5,
-          maxChildSize: 0.9,
-          builder: (_, controller) => Container(
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // Header
-                Container(
-                  padding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                  decoration: BoxDecoration(
-                    border: Border(bottom: BorderSide(color: Colors.grey[200]!)),
-                  ),
-                  child: Row(
-                    children: [
-                      IconButton(
-                        icon: Icon(Icons.arrow_back),
-                        onPressed: () => Navigator.pop(context),
-                      ),
-                      SizedBox(width: 8),
-                      Text(
-                        'Edit plan',
-                        style: TextStyle(
-                          fontSize: 24,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ],
-                  ),
+        return Container(
+          height: MediaQuery.of(context).size.height * 0.9,
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Header
+              Container(
+                padding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                decoration: BoxDecoration(
+                  border: Border(bottom: BorderSide(color: Colors.grey[200]!)),
                 ),
+                child: Row(
+                  children: [
+                    IconButton(
+                      icon: Icon(Icons.arrow_back),
+                      onPressed: () => Navigator.pop(context),
+                    ),
+                    SizedBox(width: 8),
+                    Text(
+                      'Edit plan',
+                      style: TextStyle(
+                        fontSize: 24,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
 
-                Expanded(
-                  child: ListView(
-                    controller: controller,
-                    padding: EdgeInsets.all(16),
+              Expanded(
+                child: SingleChildScrollView(
+                  padding: EdgeInsets.all(16),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      // Plan Name Section
                       Text(
                         'Name of Plan',
                         style: TextStyle(
@@ -810,7 +806,6 @@ void _editPlan(Map<String, dynamic> groupData) {
                       
                       SizedBox(height: 24),
                       
-                      // Date & Time Section
                       Text(
                         'Date & time',
                         style: TextStyle(
@@ -837,8 +832,6 @@ void _editPlan(Map<String, dynamic> groupData) {
                       ),
 
                       SizedBox(height: 24),
-
-                      // Activities Section
                       Text(
                         'Activities',
                         style: TextStyle(
@@ -856,96 +849,113 @@ void _editPlan(Map<String, dynamic> groupData) {
                       SizedBox(height: 16),
                       
                       // Activities List
-...List.generate(
-  activities.length,
-  (index) {
+// Replace the ListView.builder in the activities section with this:
+ReorderableListView.builder(
+  shrinkWrap: true,
+  physics: NeverScrollableScrollPhysics(),
+  itemCount: activities.length,
+  onReorder: (oldIndex, newIndex) {
+    setState(() {
+      if (oldIndex < newIndex) {
+        newIndex -= 1;
+      }
+      final item = activities.removeAt(oldIndex);
+      activities.insert(newIndex, item);
+    });
+  },
+  itemBuilder: (context, index) {
     final activity = activities[index];
-    return Padding(
-      padding: EdgeInsets.only(bottom: 12),
-      child: Container(
-        decoration: BoxDecoration(
-          border: Border.all(color: Colors.grey[200]!),
-          borderRadius: BorderRadius.circular(12),
-        ),
-        child: ListTile(
-          leading: ClipRRect(
-            borderRadius: BorderRadius.circular(8),
-            child: Image.network(
-              activity['photoUrl'] ?? 'https://via.placeholder.com/50',
-              width: 50,
-              height: 50,
-              fit: BoxFit.cover,
-              errorBuilder: (context, error, stackTrace) {
-                print('Error loading image: $error');
-                return Container(
-                  width: 50,
-                  height: 50,
-                  color: Colors.grey[300],
-                  child: Icon(Icons.image, color: Colors.grey[600]),
-                );
-              },
-            ),
-          ),
-          title: Text(activity['name'] ?? ''),
-          subtitle: Text(
-            activity['placeDescription']?.split(',').first ?? '',
-            style: TextStyle(color: Colors.grey[600]),
-          ),
-          trailing: IconButton(
-            icon: Icon(Icons.close, color: Colors.grey),
-            onPressed: () {
-              setState(() {
-                activities.removeAt(index);
-              });
+    return Container(
+      key: ValueKey(activity['name'] + index.toString()),
+      margin: EdgeInsets.only(bottom: 12),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        border: Border.all(color: Colors.grey[200]!),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: ListTile(
+        leading: ClipRRect(
+          borderRadius: BorderRadius.circular(8),
+          child: Image.network(
+            activity['photoUrl'] ?? 'https://via.placeholder.com/50',
+            width: 50,
+            height: 50,
+            fit: BoxFit.cover,
+            errorBuilder: (context, error, stackTrace) {
+              return Container(
+                width: 50,
+                height: 50,
+                color: Colors.grey[300],
+                child: Icon(Icons.image, color: Colors.grey[600]),
+              );
             },
           ),
+        ),
+        title: Text(activity['name'] ?? ''),
+        subtitle: Text(
+          activity['placeDescription']?.split(',').first ?? '',
+          style: TextStyle(color: Colors.grey[600]),
+        ),
+        trailing: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.drag_handle, color: Colors.grey[400]),
+            SizedBox(width: 12),
+            IconButton(
+              icon: Icon(Icons.close, color: Colors.grey),
+              onPressed: () {
+                setState(() {
+                  activities.removeAt(index);
+                });
+              },
+            ),
+          ],
         ),
       ),
     );
   },
-),
+)
                     ],
                   ),
                 ),
+              ),
 
-                // Update Button
-                Container(
-                  padding: EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    border: Border(top: BorderSide(color: Colors.grey[200]!)),
-                  ),
-                  child: ElevatedButton(
-                    onPressed: () async {
-                      if (_nameController.text.trim().isNotEmpty) {
-                        // Apply all changes at once
-                        await FirebaseFirestore.instance
-                          .collection('groups')
-                          .doc(widget.groupId)
-                          .update({
-                            'title': _nameController.text.trim(),
-                            'date': Timestamp.fromDate(selectedDate),
-                            'activities': activities,
-                          });
-                        Navigator.pop(context);
-                      }
-                    },
-                    child: Text('Update'),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Color(0xFFFFC107),
-                      foregroundColor: Colors.black,
-                      minimumSize: Size(double.infinity, 50),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
+              // Update Button
+              Container(
+                padding: EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  border: Border(top: BorderSide(color: Colors.grey[200]!)),
+                ),
+                child: ElevatedButton(
+                  onPressed: () async {
+                    if (_nameController.text.trim().isNotEmpty) {
+                      await FirebaseFirestore.instance
+                        .collection('groups')
+                        .doc(widget.groupId)
+                        .update({
+                          'title': _nameController.text.trim(),
+                          'date': Timestamp.fromDate(selectedDate),
+                          'activities': activities,
+                        });
+                      Navigator.pop(context);
+                    }
+                  },
+                  child: Text('Update'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Color(0xFFFFC107),
+                    foregroundColor: Colors.black,
+                    minimumSize: Size(double.infinity, 50),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
                     ),
                   ),
                 ),
-              ],
-            ),
+              ),
+            ],
           ),
         );
-      }
+      },
     ),
   );
 }
@@ -1635,68 +1645,70 @@ Container(
         ),
 
       // Notes Section
-      Padding(
-        padding: EdgeInsets.all(16),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Text(
-              'Notes',
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-            TextButton.icon(
-              onPressed: () => _showAddNoteDialog(context, index, activity),
-              icon: Icon(Icons.add, size: 20),
-              label: Text('Add'),
-              style: TextButton.styleFrom(
-                foregroundColor: Colors.blue,
-                padding: EdgeInsets.symmetric(horizontal: 12),
-              ),
-            ),
-          ],
+      // Notes Section
+Padding(
+  padding: EdgeInsets.fromLTRB(16, 16, 16, 8), // Reduced bottom padding
+  child: Row(
+    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+    children: [
+      Text(
+        'Notes',
+        style: TextStyle(
+          fontSize: 18,
+          fontWeight: FontWeight.w600,
         ),
       ),
-      if (notes.isEmpty)
-        Center(
-          child: Padding(
-            padding: EdgeInsets.all(24),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(Icons.note_alt_outlined, 
-                  size: 48, 
-                  color: Colors.grey[400]
-                ),
-                SizedBox(height: 12),
-                Text(
-                  'No notes yet',
-                  style: TextStyle(
-                    color: Colors.grey[600],
-                    fontSize: 16,
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
-                Text(
-                  'Add notes to keep track of details',
-                  style: TextStyle(
-                    color: Colors.grey[500],
-                    fontSize: 14,
-                  ),
-                ),
-              ],
+      TextButton.icon(
+        onPressed: () => _showAddNoteDialog(context, index, activity),
+        icon: Icon(Icons.add, size: 20),
+        label: Text('Add'),
+        style: TextButton.styleFrom(
+          foregroundColor: Colors.blue,
+          padding: EdgeInsets.symmetric(horizontal: 12),
+        ),
+      ),
+    ],
+  ),
+),
+if (notes.isEmpty)
+  Center(
+    child: Padding(
+      padding: EdgeInsets.symmetric(vertical: 16), // Reduced padding
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(Icons.note_alt_outlined, 
+            size: 48, 
+            color: Colors.grey[400]
+          ),
+          SizedBox(height: 12),
+          Text(
+            'No notes yet',
+            style: TextStyle(
+              color: Colors.grey[600],
+              fontSize: 16,
+              fontWeight: FontWeight.w500,
             ),
           ),
-        )
-      else
-        ListView.builder(
-          shrinkWrap: true,
-          physics: NeverScrollableScrollPhysics(),
-          padding: EdgeInsets.only(top: 4),
-          itemCount: notes.length,
-          itemBuilder: (context, noteIndex) {
+          Text(
+            'Add notes to keep track of details',
+            style: TextStyle(
+              color: Colors.grey[500],
+              fontSize: 14,
+            ),
+          ),
+        ],
+      ),
+    ),
+  )
+else
+  ListView.builder(
+    shrinkWrap: true,
+    physics: NeverScrollableScrollPhysics(),
+    padding: EdgeInsets.zero, // Removed top padding
+    itemCount: notes.length,
+    itemBuilder: (context, noteIndex) {
+      // Rest of the note item code remains the same
             final note = notes[noteIndex];
             DateTime noteTime = DateTime.parse(note['timestamp']);
 
@@ -1747,39 +1759,39 @@ Container(
                   );
                 }
               },
-              child: Container(
-                decoration: BoxDecoration(
-                  border: Border(
-                    bottom: BorderSide(
-                      color: Colors.grey[200]!,
-                      width: noteIndex < notes.length - 1 ? 1 : 0,
-                    ),
-                  ),
-                ),
-                child: Padding(
-                  padding: EdgeInsets.all(16),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        note['text'],
-                        style: TextStyle(
-                          fontSize: 15,
-                          height: 1.4,
-                        ),
-                      ),
-                      SizedBox(height: 8),
-                      Text(
-                        DateFormat('MMM d, yyyy h:mm a').format(noteTime),
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: Colors.grey[600],
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
+child: Container(
+  decoration: BoxDecoration(
+    border: noteIndex < notes.length - 1 ? Border(
+      bottom: BorderSide(
+        color: Colors.grey[200]!,
+        width: 0.5, // Made thinner
+      ),
+    ) : null, // No border for the last item
+  ),
+  child: Padding(
+    padding: EdgeInsets.all(16),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          note['text'],
+          style: TextStyle(
+            fontSize: 15,
+            height: 1.4,
+          ),
+        ),
+        SizedBox(height: 8),
+        Text(
+          DateFormat('MMM d, yyyy h:mm a').format(noteTime),
+          style: TextStyle(
+            fontSize: 12,
+            color: Colors.grey[600],
+          ),
+        ),
+      ],
+    ),
+  ),
+),
             );
           },
         ),
