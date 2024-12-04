@@ -1,21 +1,24 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:provider/provider.dart';
+import 'theme_provider.dart';
 
 class SettingsPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
+    final themeProvider = Provider.of<ThemeProvider>(context);
+    
     return Scaffold(
       appBar: AppBar(
-           automaticallyImplyLeading: false, 
+        automaticallyImplyLeading: false,
         title: Text('Settings and privacy'),
-        backgroundColor: Colors.white,
-        foregroundColor: Colors.black,
         elevation: 0,
       ),
       body: ListView(
         children: [
           _buildListTile(context, 'Account', Icons.person_outline),
           _buildListTile(context, 'Privacy', Icons.lock_outline),
+          _buildThemeToggle(context, themeProvider),
           _buildListTile(context, 'Push notifications', Icons.notifications_none),
           _buildListTile(context, 'Share profile', Icons.share_outlined),
           _buildListTile(context, 'Show content on TikTok', Icons.tiktok),
@@ -40,6 +43,19 @@ class SettingsPage extends StatelessWidget {
           textAlign: TextAlign.center,
           style: TextStyle(color: Colors.grey),
         ),
+      ),
+    );
+  }
+
+  Widget _buildThemeToggle(BuildContext context, ThemeProvider themeProvider) {
+    return ListTile(
+      leading: Icon(themeProvider.isDarkMode ? Icons.dark_mode : Icons.light_mode),
+      title: Text('Dark mode'),
+      trailing: Switch(
+        value: themeProvider.isDarkMode,
+        onChanged: (bool value) {
+          themeProvider.toggleTheme();
+        },
       ),
     );
   }
