@@ -3582,108 +3582,115 @@ class _ActivityBottomSheetState extends State<ActivityBottomSheet> {
     super.dispose();
   }
 
-  @override
-  Widget build(BuildContext context) {
-    return DraggableScrollableSheet(
-      initialChildSize: 0.9,
-      minChildSize: 0.5,
-      maxChildSize: 0.9,
-      builder: (_, controller) => Container(
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Center(
-              child: Container(
-                margin: EdgeInsets.only(top: 12),
-                width: 40,
-                height: 4,
-                decoration: BoxDecoration(
-                  color: Colors.grey[300],
-                  borderRadius: BorderRadius.circular(2),
-                ),
+ @override
+Widget build(BuildContext context) {
+  return DraggableScrollableSheet(
+    initialChildSize: 0.9,
+    minChildSize: 0.5,
+    maxChildSize: 0.9,
+    builder: (_, controller) => Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Center(
+            child: Container(
+              margin: EdgeInsets.only(top: 12),
+              width: 40,
+              height: 4,
+              decoration: BoxDecoration(
+                color: Colors.grey[300],
+                borderRadius: BorderRadius.circular(2),
               ),
             ),
+          ),
+          Padding(
+            padding: const EdgeInsets.all(16.0),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  _isDescriptionMode ? 'Add activity details' : 'Add place',
+                  style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                ),
+                IconButton(
+                  icon: Icon(Icons.close),
+                  onPressed: () => Navigator.pop(context),
+                ),
+              ],
+            ),
+          ),
+          Divider(height: 1),
+
+          if (!_isDescriptionMode) ...[
             Padding(
               padding: const EdgeInsets.all(16.0),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Text(
-                    _isDescriptionMode ? 'Add activity details' : 'Add place',
-                    style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+              child: TextField(
+                controller: _searchController,
+                decoration: InputDecoration(
+                  hintText: 'Search places',
+                  prefixIcon: Icon(Icons.search),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: BorderSide.none,
                   ),
-                  IconButton(
-                    icon: Icon(Icons.close),
-                    onPressed: () => Navigator.pop(context),
-                  ),
-                ],
+                  filled: true,
+                  fillColor: Colors.grey[100],
+                ),
+                onChanged: _onSearchChanged,
               ),
             ),
-            Divider(height: 1),
-
-            if (!_isDescriptionMode) ...[
-              Padding(
-                padding: const EdgeInsets.all(16.0),
-                child: TextField(
-                  controller: _searchController,
-                  decoration: InputDecoration(
-                    hintText: 'Search places',
-                    prefixIcon: Icon(Icons.search),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                      borderSide: BorderSide.none,
-                    ),
-                    filled: true,
-                    fillColor: Colors.grey[100],
-                  ),
-                  onChanged: _onSearchChanged,
-                ),
-              ),
-              Expanded(
-                child: _predictions.isEmpty
-                    ? Center(
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Icon(Icons.location_on_outlined, size: 48, color: Colors.grey),
-                            SizedBox(height: 16),
-                            Text(
-                              'Search a location to add to your activity',
-                              style: TextStyle(color: Colors.grey[600], fontSize: 16),
-                            ),
-                          ],
-                        ),
-                      )
-                    : ListView.builder(
-                        controller: controller,
-                        itemCount: _predictions.length,
-                        itemBuilder: (context, index) {
-                          final prediction = _predictions[index];
-                          return ListTile(
-                            leading: Icon(Icons.location_on_outlined),
-                            title: Text(prediction.description ?? "Unknown"),
-                            onTap: () {
-                              setState(() {
-                                _selectedPrediction = prediction;
-                                _selectedAddress = prediction.description;
-                                _isDescriptionMode = true;
-                                _predictions = [];
-                                _searchController.clear();
-                              });
-                            },
-                          );
-                        },
+            Expanded(
+              child: _predictions.isEmpty
+                  ? Center(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(Icons.location_on_outlined, size: 48, color: Colors.grey),
+                          SizedBox(height: 16),
+                          Text(
+                            'Search a location to add to your activity',
+                            style: TextStyle(color: Colors.grey[600], fontSize: 16),
+                          ),
+                        ],
                       ),
-              ),
-            ] else if (_selectedAddress != null) ...[
-              Expanded(
-                child: ListView(
-                  controller: controller,
-                  padding: EdgeInsets.all(16),
+                    )
+                  : ListView.builder(
+                      controller: controller,
+                      itemCount: _predictions.length,
+                      itemBuilder: (context, index) {
+                        final prediction = _predictions[index];
+                        return ListTile(
+                          leading: Icon(Icons.location_on_outlined),
+                          title: Text(prediction.description ?? "Unknown"),
+                          onTap: () {
+                            setState(() {
+                              _selectedPrediction = prediction;
+                              _selectedAddress = prediction.description;
+                              _isDescriptionMode = true;
+                              _predictions = [];
+                              _searchController.clear();
+                            });
+                          },
+                        );
+                      },
+                    ),
+            ),
+          ] else if (_selectedAddress != null) ...[
+            Expanded(
+              child: SingleChildScrollView(
+                controller: controller,
+                padding: EdgeInsets.only(
+                  left: 16,
+                  right: 16,
+                  top: 16,
+                  bottom: MediaQuery.of(context).viewInsets.bottom + 100,
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Container(
                       padding: EdgeInsets.all(12),
@@ -3751,6 +3758,8 @@ class _ActivityBottomSheetState extends State<ActivityBottomSheet> {
                         border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
                       ),
                       maxLines: 3,
+                      textInputAction: TextInputAction.done,
+                      onSubmitted: (_) => FocusScope.of(context).unfocus(),
                     ),
                     SizedBox(height: 24),
 
@@ -3763,29 +3772,33 @@ class _ActivityBottomSheetState extends State<ActivityBottomSheet> {
                         border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
                       ),
                       maxLines: 3,
+                      textInputAction: TextInputAction.done,
+                      onSubmitted: (_) => FocusScope.of(context).unfocus(),
                     ),
+                    SizedBox(height: 24),
                   ],
                 ),
               ),
-              Padding(
-                padding: const EdgeInsets.all(16),
-                child: ElevatedButton(
-                  onPressed: () => _addActivity(context),
-                  child: Text('Add Activity'),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.black,
-                    foregroundColor: Colors.white,
-                    minimumSize: Size(double.infinity, 50),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                  ),
+            ),
+            Padding(
+              padding: EdgeInsets.all(16),
+              child: ElevatedButton(
+                onPressed: () => _addActivity(context),
+                child: Text('Add Activity'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.black,
+                  foregroundColor: Colors.white,
+                  minimumSize: Size(double.infinity, 50),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                 ),
               ),
-            ],
+            ),
           ],
-        ),
+        ],
       ),
-    );
-  }
+    ),
+  );
+}
 
   Future<void> _onSearchChanged(String value) async {
     if (value.isEmpty) {
