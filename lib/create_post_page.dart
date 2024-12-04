@@ -119,6 +119,32 @@ class HashtagService {
   }
 }
 
+List<String> createSearchableText(Map<String, dynamic> postData) {  // Change return type to List<String>
+  Set<String> searchTerms = {};
+  
+  // Add individual words from title
+  if (postData['title'] != null) {
+    searchTerms.addAll(postData['title'].toString().toLowerCase().split(' '));
+  }
+  
+  // Add individual words from description
+  if (postData['description'] != null) {
+    searchTerms.addAll(postData['description'].toString().toLowerCase().split(' '));
+  }
+  
+  // Add location
+  if (postData['location'] != null) {
+    searchTerms.addAll(postData['location'].toString().toLowerCase().split(' '));
+  }
+  
+  // Add hashtags
+  if (postData['hashtags'] != null) {
+    searchTerms.addAll(List<String>.from(postData['hashtags']).map((tag) => tag.toLowerCase()));
+  }
+  
+  // Convert set to list to avoid duplicates
+  return searchTerms.toList();
+}
 
 class CreatePostPage extends StatefulWidget {
   @override
@@ -1162,27 +1188,32 @@ Future<void> _createPost() async {
         String userPhotoURL = userDoc['photoURL'] ?? ''; // Changed from photoUrl to photoURL
 
         // Create post document with trending fields
-        Map<String, dynamic> postData = {
-          'userId': currentUser.uid,
-          'title': _title,
-          'description': _description,
-          'hashtags': _hashtags,
-          'imageUrls': imageUrls,
-          'createdAt': FieldValue.serverTimestamp(),
-          'username': username,
-          'userPhotoURL': userPhotoURL, // Changed from userPhotoUrl to userPhotoURL
-          'category': _selectedCategory,
-          'city': _selectedCity,
-          // Add trending-related fields
-          'likes': 0,
-          'comments': 0,
-          'shares': 0,
-          'views': 0,
-          'trendingScore': 0.0,
-          'lastTrendingUpdate': FieldValue.serverTimestamp(),
-          'activities': _activities.map((a) => a.toMap()).toList(),
-          'location': _selectedCity,
-        };
+Map<String, dynamic> postData = {
+  'userId': currentUser.uid,
+  'title': _title,
+  'description': _description,
+  'hashtags': _hashtags,
+  'imageUrls': imageUrls,
+  'createdAt': FieldValue.serverTimestamp(),
+  'username': username,
+  'userPhotoURL': userPhotoURL,
+  'category': _selectedCategory,
+  'city': _selectedCity,
+  'likes': 0,
+  'comments': 0,
+  'shares': 0,
+  'views': 0,
+  'trendingScore': 0.0,
+  'lastTrendingUpdate': FieldValue.serverTimestamp(),
+  'activities': _activities.map((a) => a.toMap()).toList(),
+  'location': _selectedCity,
+'searchableText': createSearchableText({
+    'title': _title,
+    'description': _description,
+    'location': _selectedCity,
+    'hashtags': _hashtags,
+  }), // This now stores an array of strings
+};
 
         // Add post to Firestore
         DocumentReference postRef = await FirebaseFirestore.instance.collection('posts').add(postData);

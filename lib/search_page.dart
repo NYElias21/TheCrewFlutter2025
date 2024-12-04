@@ -124,6 +124,7 @@ class _SearchPageState extends State<SearchPage> {
   TextEditingController _searchController = TextEditingController();
   final PageController _pageController = PageController();
   Timer? _autoScrollTimer;
+  Timer? _debounce;
   int _currentPage = 0;
 
  @override
@@ -160,93 +161,188 @@ void initState() {
   @override
   void dispose() {
     _autoScrollTimer?.cancel();
+    _debounce?.cancel();
     _pageController.dispose();
     _searchController.dispose();
     super.dispose();
   }
 
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: TextField(
-          controller: _searchController,
-          decoration: InputDecoration(
-            hintText: 'Search...',
-            border: InputBorder.none,
-          ),
-          onChanged: (value) {
-            setState(() {});
-          },
+@override
+Widget build(BuildContext context) {
+  return Scaffold(
+    appBar: AppBar( // Add this parameter name
+      title: TextField(
+        controller: _searchController,
+        decoration: InputDecoration(
+          hintText: 'Search experiences, places, or hashtags...',
+          border: InputBorder.none,
+          prefixIcon: Icon(Icons.search),
+          suffixIcon: _searchController.text.isNotEmpty
+            ? IconButton(
+                icon: Icon(Icons.clear),
+                onPressed: () {
+                  _searchController.clear();
+                  setState(() {});
+                },
+              )
+            : null,
         ),
-        backgroundColor: Colors.white,
-        elevation: 0,
-        iconTheme: IconThemeData(color: Colors.black),
+        onChanged: (value) {
+          if (_debounce?.isActive ?? false) _debounce!.cancel();
+          _debounce = Timer(const Duration(milliseconds: 500), () {
+            setState(() {});
+          });
+        },
       ),
-      body: _buildSearchResults(),
-    );
-  }
+      backgroundColor: Colors.white,
+      elevation: 0,
+      iconTheme: IconThemeData(color: Colors.black),
+    ),
+    body: _buildSearchResults(),
+  );
+}
 
 Widget _buildSearchResults() {
   String query = _searchController.text.trim();
 
-  return SingleChildScrollView(
-    child: Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        _buildPromotionalBanner(), // Keep this
-        
-        // Trending Section
-        Padding(
-          padding: const EdgeInsets.all(16.0),
+  // Show default content when there's no search query
+  if (query.isEmpty) {
+    return SingleChildScrollView(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _buildPromotionalBanner(),
+          Padding(
+            padding: const EdgeInsets.all(16.0),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Trending',
+                  style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+                ),
+                Text(
+                  'What Locals are loving rn',
+                  style: TextStyle(fontSize: 16, color: Colors.grey[600]),
+                ),
+              ],
+            ),
+          ),
+          _buildTrendingPosts(),
+          Padding(
+            padding: const EdgeInsets.all(16.0),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Collections',
+                  style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+                ),
+                Text(
+                  'Your recent collections',
+                  style: TextStyle(fontSize: 16, color: Colors.grey[600]),
+                ),
+              ],
+            ),
+          ),
+          _buildCollections(),
+        ],
+      ),
+    );
+  }
+
+  // Show search results when there is a query
+return StreamBuilder<QuerySnapshot>(
+  stream: FirebaseFirestore.instance
+      .collection('posts')
+      .where('searchableText', arrayContains: query.toLowerCase())
+      .limit(20)
+      .snapshots(),
+    builder: (context, snapshot) {
+      if (snapshot.hasError) {
+        return Center(child: Text('Error: ${snapshot.error}'));
+      }
+
+      if (snapshot.connectionState == ConnectionState.waiting) {
+        return Center(child: CircularProgressIndicator());
+      }
+
+      if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+        return Center(
           child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisAlignment: MainAxisAlignment.center,
             children: [
+              Icon(Icons.search_off, size: 64, color: Colors.grey),
+              SizedBox(height: 16),
               Text(
-                'Trending',
-                style: TextStyle(
-                  fontSize: 24,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-              Text(
-                'What Locals are loving rn',
-                style: TextStyle(
-                  fontSize: 16,
-                  color: Colors.grey[600],
-                ),
+                'No results found for "$query"',
+                style: TextStyle(fontSize: 16, color: Colors.grey[600]),
               ),
             ],
           ),
+        );
+      }
+
+      return GridView.builder(
+        padding: EdgeInsets.all(16),
+        gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+          crossAxisCount: 2,
+          crossAxisSpacing: 16,
+          mainAxisSpacing: 16,
+          childAspectRatio: 0.8,
         ),
-        _buildTrendingPosts(),
-        
-        // Collections Section
-        Padding(
-          padding: const EdgeInsets.all(16.0),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'Collections',
-                style: TextStyle(
-                  fontSize: 24,
-                  fontWeight: FontWeight.bold,
+        itemCount: snapshot.data!.docs.length,
+        itemBuilder: (context, index) {
+          final post = snapshot.data!.docs[index];
+          final data = post.data() as Map<String, dynamic>;
+          
+          return GestureDetector(
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => PostDetailPage(post: post),
                 ),
-              ),
-              Text(
-                'Your recent collections',
-                style: TextStyle(
-                  fontSize: 16,
-                  color: Colors.grey[600],
+              );
+            },
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(12),
+                    child: Image.network(
+                      data['imageUrls'][0],
+                      fit: BoxFit.cover,
+                      width: double.infinity,
+                      errorBuilder: (context, error, stackTrace) {
+                        return Container(
+                          color: Colors.grey[300],
+                          child: Icon(Icons.error),
+                        );
+                      },
+                    ),
+                  ),
                 ),
-              ),
-            ],
-          ),
-        ),
-        _buildCollections(),
-      ],
-    ),
+                SizedBox(height: 8),
+                Text(
+                  data['title'] ?? '',
+                  style: TextStyle(fontWeight: FontWeight.bold),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                Text(
+                  data['location'] ?? '',
+                  style: TextStyle(color: Colors.grey[600], fontSize: 12),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ],
+            ),
+          );
+        },
+      );
+    },
   );
 }
 
