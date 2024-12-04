@@ -1181,114 +1181,102 @@ void _showDateTimePicker(BuildContext context, int index, Map<String, dynamic> a
   DateTime initialDate = activity['dateTime'] != null 
       ? DateTime.parse(activity['dateTime'])
       : DateTime.now();
+  DateTime tempDateTime = initialDate;
 
   showModalBottomSheet(
     context: context,
     isScrollControlled: true,
     backgroundColor: Colors.transparent,
-    builder: (context) => Container(
-      padding: EdgeInsets.only(
-        bottom: MediaQuery.of(context).viewInsets.bottom,
-      ),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.vertical(top: Radius.circular(30)),
-      ),
-      child: Padding(
-        padding: EdgeInsets.symmetric(horizontal: 20),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            SizedBox(height: 20),
-            Text(
-              'Set Date & Time',
-              style: TextStyle(
-                fontSize: 24,
-                fontWeight: FontWeight.bold,
-                color: Colors.black,
-              ),
-              textAlign: TextAlign.center,
-            ),
-            SizedBox(height: 24),
-            Container(
-              padding: EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: Colors.grey[100],
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: Colors.grey[300]!),
-              ),
-              child: CupertinoDateTextBox(
-                initialValue: initialDate,
-                onDateChange: (DateTime? date) {
-                  if (date != null) {
-                    initialDate = date;
-                  }
-                },
-                hintText: 'Select date and time',
-              ),
-            ),
-            SizedBox(height: 24),
-            Row(
-              children: [
-                Expanded(
-                  child: TextButton(
-                    child: Text(
-                      'Cancel',
-                      style: TextStyle(
-                        color: Colors.black,
-                        fontSize: 17,
-                      ),
-                    ),
-                    style: TextButton.styleFrom(
-                      padding: EdgeInsets.symmetric(vertical: 16),
-                      side: BorderSide(color: Colors.grey[300]!),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                    ),
-                    onPressed: () => Navigator.pop(context),
-                  ),
+    builder: (context) => StatefulBuilder( // Add StatefulBuilder to update the UI
+      builder: (context, setState) => Container(
+        padding: EdgeInsets.only(
+          bottom: MediaQuery.of(context).viewInsets.bottom,
+        ),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(30)),
+        ),
+        child: Padding(
+          padding: EdgeInsets.symmetric(horizontal: 20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              SizedBox(height: 20),
+              Text(
+                'Set Date & Time',
+                style: TextStyle(
+                  fontSize: 24,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.black,
                 ),
-                SizedBox(width: 16),
-                Expanded(
-                  child: ElevatedButton(
-                    child: Text(
-                      'Save',
-                      style: TextStyle(
-                        color: Colors.black,
-                        fontSize: 17,
-                      ),
+                textAlign: TextAlign.center,
+              ),
+              SizedBox(height: 24),
+              Container(
+                padding: EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: Colors.grey[100],
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: Colors.grey[300]!),
+                ),
+                child: Text(
+                  DateFormat('EEE, MMM d @ h:mm a').format(tempDateTime),
+                  style: TextStyle(fontSize: 16),
+                  textAlign: TextAlign.center,
+                ),
+              ),
+              SizedBox(height: 16),
+              Container(
+                height: 200,
+                child: CupertinoDatePicker(
+                  mode: CupertinoDatePickerMode.dateAndTime,
+                  initialDateTime: initialDate,
+                  onDateTimeChanged: (DateTime dateTime) {
+                    setState(() {
+                      tempDateTime = dateTime;
+                    });
+                  },
+                ),
+              ),
+              SizedBox(height: 24),
+              Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton(
+                      child: Text('Cancel'),
+                      onPressed: () => Navigator.pop(context),
                     ),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Color(0xFFFFC107),
-                      elevation: 0,
-                      padding: EdgeInsets.symmetric(vertical: 16),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
+                  ),
+                  SizedBox(width: 16),
+                  Expanded(
+                    child: ElevatedButton(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Color(0xFFFFC107),
                       ),
-                    ),
-                    onPressed: () async {
-                      await FirebaseFirestore.instance
+                      child: Text('Save'),
+                      onPressed: () async {
+                        await FirebaseFirestore.instance
                           .collection('groups')
                           .doc(widget.groupId)
                           .get()
                           .then((doc) {
-                        List<dynamic> activities = List.from(doc.data()!['activities']);
-                        activities[index] = {
-                          ...activities[index],
-                          'dateTime': initialDate.toIso8601String(),
-                        };
-                        doc.reference.update({'activities': activities});
-                      });
-                      Navigator.pop(context);
-                    },
+                            List<dynamic> activities = List.from(doc.data()!['activities']);
+                            activities[index] = {
+                              ...activities[index],
+                              'dateTime': tempDateTime.toIso8601String(),
+                            };
+                            doc.reference.update({'activities': activities});
+                          });
+                        Navigator.pop(context);
+                      },
+                    ),
                   ),
-                ),
-              ],
-            ),
-            SizedBox(height: 20),
-          ],
+                ],
+              ),
+              SizedBox(height: 20),
+            ],
+          ),
         ),
       ),
     ),
@@ -3552,27 +3540,69 @@ class _ActivityBottomSheetState extends State<ActivityBottomSheet> {
   AutocompletePrediction? _selectedPrediction;
   String? _selectedAddress;
 
-  Future<void> _selectDate(BuildContext context) async {
-    final DateTime? picked = await showDatePicker(
-      context: context,
-      initialDate: _selectedDate ?? DateTime.now(),
-      firstDate: DateTime.now(),
-      lastDate: DateTime.now().add(Duration(days: 365)),
+Future<void> _selectDateTime(BuildContext context) async {
+  DateTime initialDateTime = DateTime.now();
+  if (_selectedDate != null && _selectedTime != null) {
+    initialDateTime = DateTime(
+      _selectedDate!.year,
+      _selectedDate!.month,
+      _selectedDate!.day,
+      _selectedTime!.hour,
+      _selectedTime!.minute,
     );
-    if (picked != null && picked != _selectedDate) {
-      setState(() => _selectedDate = picked);
-    }
   }
 
-  Future<void> _selectTime(BuildContext context) async {
-    final TimeOfDay? picked = await showTimePicker(
-      context: context,
-      initialTime: _selectedTime ?? TimeOfDay.now(),
-    );
-    if (picked != null && picked != _selectedTime) {
-      setState(() => _selectedTime = picked);
-    }
+  DateTime? pickedDateTime = await showModalBottomSheet<DateTime>(
+    context: context,
+    builder: (context) {
+      DateTime tempDateTime = initialDateTime;
+      return Container(
+        height: 300,
+        color: Colors.white,
+        child: Column(
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: Text('Cancel'),
+                ),
+                TextButton(
+                  onPressed: () => Navigator.pop(context, tempDateTime),
+                  child: Text('Done'),
+                ),
+              ],
+            ),
+            Expanded(
+              child: CupertinoDatePicker(
+                mode: CupertinoDatePickerMode.dateAndTime,
+                initialDateTime: initialDateTime,
+                onDateTimeChanged: (DateTime dateTime) {
+                  tempDateTime = dateTime;
+                },
+              ),
+            ),
+          ],
+        ),
+      );
+    },
+  );
+
+  if (pickedDateTime != null) {
+    setState(() {
+      _selectedDate = DateTime(
+        pickedDateTime.year,
+        pickedDateTime.month,
+        pickedDateTime.day,
+      );
+      _selectedTime = TimeOfDay(
+        hour: pickedDateTime.hour,
+        minute: pickedDateTime.minute,
+      );
+    });
   }
+}
 
   @override
   void dispose() {
@@ -3723,31 +3753,31 @@ Widget build(BuildContext context) {
                     SizedBox(height: 24),
 
                     Text('When?', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
-                    SizedBox(height: 8),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: OutlinedButton.icon(
-                            icon: Icon(Icons.calendar_today),
-                            label: Text(_selectedDate != null 
-                              ? DateFormat('MMM d, yyyy').format(_selectedDate!)
-                              : 'Select date'),
-                            onPressed: () => _selectDate(context),
-                          ),
-                        ),
-                        SizedBox(width: 8),
-                        Expanded(
-                          child: OutlinedButton.icon(
-                            icon: Icon(Icons.access_time),
-                            label: Text(_selectedTime != null 
-                              ? _selectedTime!.format(context)
-                              : 'Select time'),
-                            onPressed: () => _selectTime(context),
-                          ),
-                        ),
-                      ],
-                    ),
-                    SizedBox(height: 24),
+SizedBox(height: 8),
+Row(
+  children: [
+    Expanded(
+      child: OutlinedButton.icon(
+        icon: Icon(Icons.calendar_today),
+        label: Text(
+          _selectedDate != null && _selectedTime != null
+            ? DateFormat('EEE, MMM d @ h:mm a').format(
+                DateTime(
+                  _selectedDate!.year,
+                  _selectedDate!.month,
+                  _selectedDate!.day,
+                  _selectedTime!.hour,
+                  _selectedTime!.minute,
+                )
+              )
+            : 'Select date & time'
+        ),
+        onPressed: () => _selectDateTime(context),
+      ),
+    ),
+  ],
+),
+SizedBox(height: 24),
 
                     Text('Notes', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
                     SizedBox(height: 8),
