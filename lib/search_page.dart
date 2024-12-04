@@ -261,7 +261,7 @@ Widget _buildTrendingPosts() {
       }
 
       return Container(
-        height: 460, // Increased height to accommodate all content
+        height: 460,
         child: ListView.builder(
           scrollDirection: Axis.horizontal,
           itemCount: snapshot.data!.length,
@@ -269,104 +269,154 @@ Widget _buildTrendingPosts() {
           itemBuilder: (context, index) {
             final post = snapshot.data![index];
             
-            return Container(
-              width: MediaQuery.of(context).size.width * 0.8,
-              margin: EdgeInsets.only(right: 16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisSize: MainAxisSize.min, // Added this
-                children: [
-                  // Trending rank indicator
-                  Container(
-                    width: 40,
-                    height: 40,
-                    alignment: Alignment.center,
-                    decoration: BoxDecoration(
-                      color: Colors.black,
-                      shape: BoxShape.circle,
-                    ),
-                    child: Text(
-                      '${index + 1}',
-                      style: TextStyle(
-                        fontSize: 24,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.white,
+            return GestureDetector(
+              onTap: () async {
+                try {
+                  DocumentSnapshot postDoc = await FirebaseFirestore.instance
+                      .collection('posts')
+                      .doc(post.id)
+                      .get();
+
+                  if (postDoc.exists) {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => PostDetailPage(post: postDoc),
                       ),
-                    ),
-                  ),
-                  SizedBox(height: 8),
-                  // Post image
-                  ClipRRect(
-                    borderRadius: BorderRadius.circular(12),
-                    child: AspectRatio(
-                      aspectRatio: 4/3,
-                      child: Image.network(
-                        post.imageUrls[0],
-                        fit: BoxFit.cover,
+                    );
+                  } else {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text('Post not found')),
+                    );
+                  }
+                } catch (e) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text('Error loading post: $e')),
+                  );
+                }
+              },
+              child: Container(
+                width: MediaQuery.of(context).size.width * 0.8,
+                margin: EdgeInsets.only(right: 16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Container(
+                      width: 40,
+                      height: 40,
+                      alignment: Alignment.center,
+                      decoration: BoxDecoration(
+                        color: Colors.black,
+                        shape: BoxShape.circle,
                       ),
-                    ),
-                  ),
-                  SizedBox(height: 12),
-                  // Engagement metrics
-                  Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(Icons.favorite, size: 16, color: Colors.red),
-                      SizedBox(width: 4),
-                      Text('${post.likes}'),
-                      SizedBox(width: 16),
-                      Icon(Icons.comment, size: 16),
-                      SizedBox(width: 4),
-                      Text('${post.comments}'),
-                      SizedBox(width: 16),
-                      Icon(Icons.remove_red_eye, size: 16),
-                      SizedBox(width: 4),
-                      Text('${post.views}'),
-                    ],
-                  ),
-                  SizedBox(height: 12),
-                  // User info
-                  Row(
-                    children: [
-                      CircleAvatar(
-                        radius: 16,
-                        backgroundImage: NetworkImage(post.userPhotoUrl),
-                      ),
-                      SizedBox(width: 8),
-                      Expanded(
-                        child: Text(
-                          post.username,
-                          style: TextStyle(fontWeight: FontWeight.bold),
-                          overflow: TextOverflow.ellipsis,
+                      child: Text(
+                        '${index + 1}',
+                        style: TextStyle(
+                          fontSize: 24,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.white,
                         ),
                       ),
-                    ],
-                  ),
-                  SizedBox(height: 8),
-                  // Post title
-                  Text(
-                    post.title,
-                    style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
                     ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  // Location
-                  Text(
-                    post.location,
-                    style: TextStyle(color: Colors.grey[600]),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ],
+                    SizedBox(height: 8),
+                    // Use error handling for main image
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(12),
+                      child: AspectRatio(
+                        aspectRatio: 4/3,
+                        child: Image.network(
+                          post.imageUrls[0],
+                          fit: BoxFit.cover,
+                          errorBuilder: (context, error, stackTrace) {
+                            return Container(
+                              color: Colors.grey[300],
+                              child: Icon(Icons.error),
+                            );
+                          },
+                        ),
+                      ),
+                    ),
+                    SizedBox(height: 12),
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.favorite, size: 16, color: Colors.red),
+                        SizedBox(width: 4),
+                        Text('${post.likes}'),
+                        SizedBox(width: 16),
+                        Icon(Icons.comment, size: 16),
+                        SizedBox(width: 4),
+                        Text('${post.comments}'),
+                        SizedBox(width: 16),
+                        Icon(Icons.remove_red_eye, size: 16),
+                        SizedBox(width: 4),
+                        Text('${post.views}'),
+                      ],
+                    ),
+                    SizedBox(height: 12),
+                    Row(
+                      children: [
+                        // Use the same avatar builder from PostDetailPage
+                        FutureBuilder<DocumentSnapshot>(
+                          future: FirebaseFirestore.instance
+                              .collection('users')
+                              .doc(post.userId)
+                              .get(),
+                          builder: (context, snapshot) {
+                            String userPhotoUrl = '';
+                            if (snapshot.hasData && snapshot.data != null) {
+                              userPhotoUrl = (snapshot.data!.data() as Map<String, dynamic>)?['photoURL'] ?? '';
+                            }
+                            return _buildUserAvatar(userPhotoUrl, radius: 16);
+                          },
+                        ),
+                        SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            post.username,
+                            style: TextStyle(fontWeight: FontWeight.bold),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ],
+                    ),
+                    SizedBox(height: 8),
+                    Text(
+                      post.title,
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    Text(
+                      post.location,
+                      style: TextStyle(color: Colors.grey[600]),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ],
+                ),
               ),
             );
           },
         ),
       );
     },
+  );
+}
+
+// Add the _buildUserAvatar method from PostDetailPage
+Widget _buildUserAvatar(String photoUrl, {double radius = 20}) {
+  return CircleAvatar(
+    radius: radius,
+    backgroundColor: Colors.grey[300],
+    backgroundImage: photoUrl.isNotEmpty ? NetworkImage(photoUrl) : null,
+    child: photoUrl.isEmpty
+        ? Icon(Icons.person, size: radius * 1.2, color: Colors.grey[600])
+        : null,
   );
 }
 

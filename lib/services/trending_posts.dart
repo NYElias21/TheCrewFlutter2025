@@ -3,6 +3,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 
 class TrendingPost {
   final String id;
+  final String userId; 
   final String title;
   final String subtitle;
   final String username;
@@ -18,6 +19,7 @@ class TrendingPost {
 
   TrendingPost({
     required this.id,
+    required this.userId,
     required this.title,
     required this.subtitle,
     required this.username,
@@ -58,6 +60,7 @@ class TrendingPost {
 
     return TrendingPost(
       id: doc.id,
+      userId: data['userId'] ?? '', 
       title: data['title'] ?? '',
       subtitle: data['subtitle'] ?? '',
       username: data['username'] ?? '',

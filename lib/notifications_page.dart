@@ -85,8 +85,14 @@ Widget _buildGroupInvitesSection(String currentUserId) {
         return SizedBox.shrink();
       }
 
-      var userData = snapshot.data!.data() as Map<String, dynamic>;
-      List<dynamic> pendingInvites = userData['pendingInvites'] ?? [];
+      // Safely cast the data with null check
+      var userData = snapshot.data!.data();
+      if (userData == null) {
+        return SizedBox.shrink();
+      }
+
+      var data = userData as Map<String, dynamic>;
+      List<dynamic> pendingInvites = data['pendingInvites'] ?? [];
       
       if (pendingInvites.isEmpty) {
         return SizedBox.shrink();
@@ -110,8 +116,18 @@ Widget _buildGroupInvitesSection(String currentUserId) {
               return FutureBuilder<DocumentSnapshot>(
                 future: FirebaseFirestore.instance.collection('groups').doc(pendingInvites[index]).get(),
                 builder: (context, groupSnapshot) {
-                  if (!groupSnapshot.hasData) return SizedBox.shrink();
-                  var groupData = groupSnapshot.data!.data() as Map<String, dynamic>;
+                  if (!groupSnapshot.hasData || !groupSnapshot.data!.exists) {
+                    return SizedBox.shrink();
+                  }
+
+                  // Safely cast the group data with null check
+                  var groupData = groupSnapshot.data!.data();
+                  if (groupData == null) {
+                    return SizedBox.shrink();
+                  }
+
+                  var group = groupData as Map<String, dynamic>;
+                  
                   return Card(
                     margin: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                     child: Padding(
@@ -120,7 +136,7 @@ Widget _buildGroupInvitesSection(String currentUserId) {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            groupData['title'] ?? 'Unnamed Group',
+                            group['title'] ?? 'Unnamed Group',
                             style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
                           ),
                           SizedBox(height: 8),
@@ -129,30 +145,29 @@ Widget _buildGroupInvitesSection(String currentUserId) {
                             style: TextStyle(fontSize: 14, color: Colors.grey[600]),
                           ),
                           SizedBox(height: 16),
-Row(
-  mainAxisAlignment: MainAxisAlignment.end,
-  children: [
-    TextButton(
-      child: Text('Decline'),
-      onPressed: () => _declineInvite(context, currentUserId, pendingInvites[index]),
-      style: TextButton.styleFrom(
-        foregroundColor: Colors.blueAccent, // Use foregroundColor instead of primary
-      ),
-    ),
-    SizedBox(width: 16),
-    ElevatedButton(
-      child: Text('Accept'),
-      onPressed: () => _acceptInvite(context, currentUserId, pendingInvites[index]),
-      style: ElevatedButton.styleFrom(
-        backgroundColor: Colors.blueAccent, // Use backgroundColor instead of primary
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(20),
-        ),
-      ),
-    ),
-  ],
-),
-
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.end,
+                            children: [
+                              TextButton(
+                                child: Text('Decline'),
+                                onPressed: () => _declineInvite(context, currentUserId, pendingInvites[index]),
+                                style: TextButton.styleFrom(
+                                  foregroundColor: Colors.blueAccent,
+                                ),
+                              ),
+                              SizedBox(width: 16),
+                              ElevatedButton(
+                                child: Text('Accept'),
+                                onPressed: () => _acceptInvite(context, currentUserId, pendingInvites[index]),
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: Colors.blueAccent,
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(20),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
                         ],
                       ),
                     ),
