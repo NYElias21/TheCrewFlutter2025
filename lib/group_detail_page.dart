@@ -841,6 +841,29 @@ void _editPlan(Map<String, dynamic> groupData) {
       : DateTime.now();
   List<dynamic> activities = List.from(groupData['activities'] ?? []);
   _nameController.text = groupData['title'] ?? '';
+  String currentCoverPhoto = groupData['imageUrls']?[0] ?? '';
+  File? selectedImage;
+
+  Future<void> pickImage() async {
+    final ImagePicker picker = ImagePicker();
+    final XFile? image = await picker.pickImage(source: ImageSource.gallery);
+    
+    if (image != null) {
+      selectedImage = File(image.path);
+    }
+  }
+
+  Future<String?> uploadImage(File imageFile) async {
+    try {
+      String fileName = DateTime.now().millisecondsSinceEpoch.toString();
+      Reference ref = FirebaseStorage.instance.ref().child('groups/$fileName');
+      await ref.putFile(imageFile);
+      return await ref.getDownloadURL();
+    } catch (e) {
+      print('Error uploading image: $e');
+      return null;
+    }
+  }
 
   showModalBottomSheet(
     context: context,
@@ -887,6 +910,58 @@ void _editPlan(Map<String, dynamic> groupData) {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
+                      // Cover Photo Section
+                      Text(
+                        'Cover Photo',
+                        style: TextStyle(
+                          fontSize: 20,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      SizedBox(height: 8),
+                      GestureDetector(
+                        onTap: () async {
+                          await pickImage();
+                          setState(() {}); // Rebuild to show new image
+                        },
+                        child: Container(
+                          height: 200,
+                          width: double.infinity,
+                          decoration: BoxDecoration(
+                            color: Colors.grey[100],
+                            borderRadius: BorderRadius.circular(12),
+                            image: selectedImage != null
+                                ? DecorationImage(
+                                    image: FileImage(selectedImage!),
+                                    fit: BoxFit.cover,
+                                  )
+                                : currentCoverPhoto.isNotEmpty
+                                    ? DecorationImage(
+                                        image: NetworkImage(currentCoverPhoto),
+                                        fit: BoxFit.cover,
+                                      )
+                                    : null,
+                          ),
+                          child: selectedImage == null && currentCoverPhoto.isEmpty
+                              ? Center(
+                                  child: Column(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: [
+                                      Icon(Icons.add_a_photo, size: 40, color: Colors.grey[400]),
+                                      SizedBox(height: 8),
+                                      Text(
+                                        'Tap to add cover photo',
+                                        style: TextStyle(color: Colors.grey[600]),
+                                      ),
+                                    ],
+                                  ),
+                                )
+                              : null,
+                        ),
+                      ),
+
+                      SizedBox(height: 24),
+
                       Text(
                         'Name of Plan',
                         style: TextStyle(
@@ -957,73 +1032,71 @@ void _editPlan(Map<String, dynamic> groupData) {
                       ),
                       SizedBox(height: 16),
                       
-                      // Activities List
-// Replace the ListView.builder in the activities section with this:
-ReorderableListView.builder(
-  shrinkWrap: true,
-  physics: NeverScrollableScrollPhysics(),
-  itemCount: activities.length,
-  onReorder: (oldIndex, newIndex) {
-    setState(() {
-      if (oldIndex < newIndex) {
-        newIndex -= 1;
-      }
-      final item = activities.removeAt(oldIndex);
-      activities.insert(newIndex, item);
-    });
-  },
-  itemBuilder: (context, index) {
-    final activity = activities[index];
-    return Container(
-      key: ValueKey(activity['name'] + index.toString()),
-      margin: EdgeInsets.only(bottom: 12),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        border: Border.all(color: Colors.grey[200]!),
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: ListTile(
-        leading: ClipRRect(
-          borderRadius: BorderRadius.circular(8),
-          child: Image.network(
-            activity['photoUrl'] ?? 'https://via.placeholder.com/50',
-            width: 50,
-            height: 50,
-            fit: BoxFit.cover,
-            errorBuilder: (context, error, stackTrace) {
-              return Container(
-                width: 50,
-                height: 50,
-                color: Colors.grey[300],
-                child: Icon(Icons.image, color: Colors.grey[600]),
-              );
-            },
-          ),
-        ),
-        title: Text(activity['name'] ?? ''),
-        subtitle: Text(
-          activity['placeDescription']?.split(',').first ?? '',
-          style: TextStyle(color: Colors.grey[600]),
-        ),
-        trailing: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(Icons.drag_handle, color: Colors.grey[400]),
-            SizedBox(width: 12),
-            IconButton(
-              icon: Icon(Icons.close, color: Colors.grey),
-              onPressed: () {
-                setState(() {
-                  activities.removeAt(index);
-                });
-              },
-            ),
-          ],
-        ),
-      ),
-    );
-  },
-)
+                      ReorderableListView.builder(
+                        shrinkWrap: true,
+                        physics: NeverScrollableScrollPhysics(),
+                        itemCount: activities.length,
+                        onReorder: (oldIndex, newIndex) {
+                          setState(() {
+                            if (oldIndex < newIndex) {
+                              newIndex -= 1;
+                            }
+                            final item = activities.removeAt(oldIndex);
+                            activities.insert(newIndex, item);
+                          });
+                        },
+                        itemBuilder: (context, index) {
+                          final activity = activities[index];
+                          return Container(
+                            key: ValueKey(activity['name'] + index.toString()),
+                            margin: EdgeInsets.only(bottom: 12),
+                            decoration: BoxDecoration(
+                              color: Colors.white,
+                              border: Border.all(color: Colors.grey[200]!),
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: ListTile(
+                              leading: ClipRRect(
+                                borderRadius: BorderRadius.circular(8),
+                                child: Image.network(
+                                  activity['photoUrl'] ?? 'https://via.placeholder.com/50',
+                                  width: 50,
+                                  height: 50,
+                                  fit: BoxFit.cover,
+                                  errorBuilder: (context, error, stackTrace) {
+                                    return Container(
+                                      width: 50,
+                                      height: 50,
+                                      color: Colors.grey[300],
+                                      child: Icon(Icons.image, color: Colors.grey[600]),
+                                    );
+                                  },
+                                ),
+                              ),
+                              title: Text(activity['name'] ?? ''),
+                              subtitle: Text(
+                                activity['placeDescription']?.split(',').first ?? '',
+                                style: TextStyle(color: Colors.grey[600]),
+                              ),
+                              trailing: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(Icons.drag_handle, color: Colors.grey[400]),
+                                  SizedBox(width: 12),
+                                  IconButton(
+                                    icon: Icon(Icons.close, color: Colors.grey),
+                                    onPressed: () {
+                                      setState(() {
+                                        activities.removeAt(index);
+                                      });
+                                    },
+                                  ),
+                                ],
+                              ),
+                            ),
+                          );
+                        },
+                      ),
                     ],
                   ),
                 ),
@@ -1039,15 +1112,50 @@ ReorderableListView.builder(
                 child: ElevatedButton(
                   onPressed: () async {
                     if (_nameController.text.trim().isNotEmpty) {
-                      await FirebaseFirestore.instance
-                        .collection('groups')
-                        .doc(widget.groupId)
-                        .update({
+                      // Show loading indicator
+                      showDialog(
+                        context: context,
+                        barrierDismissible: false,
+                        builder: (BuildContext context) {
+                          return Center(child: CircularProgressIndicator());
+                        },
+                      );
+
+                      try {
+                        // Upload new image if selected
+                        String? newImageUrl;
+                        if (selectedImage != null) {
+                          newImageUrl = await uploadImage(selectedImage!);
+                        }
+
+                        // Prepare update data
+                        Map<String, dynamic> updateData = {
                           'title': _nameController.text.trim(),
                           'date': Timestamp.fromDate(selectedDate),
                           'activities': activities,
-                        });
-                      Navigator.pop(context);
+                        };
+
+                        // Add new image URL if available
+                        if (newImageUrl != null) {
+                          updateData['imageUrls'] = [newImageUrl];
+                        }
+
+                        // Update Firestore
+                        await FirebaseFirestore.instance
+                          .collection('groups')
+                          .doc(widget.groupId)
+                          .update(updateData);
+
+                        // Close loading dialog and edit sheet
+                        Navigator.of(context).pop(); // Close loading indicator
+                        Navigator.of(context).pop(); // Close edit sheet
+                      } catch (e) {
+                        // Close loading dialog and show error
+                        Navigator.of(context).pop();
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(content: Text('Error updating plan: $e')),
+                        );
+                      }
                     }
                   },
                   child: Text('Update'),

@@ -490,31 +490,27 @@ Widget _buildGroupMembersSection(BuildContext context, List<String> postGroupMem
         );
       }
 
-      // Combine members from both group and post
-      Set<String> allMembers = {};
-      
-      // Add members from post
-      allMembers.addAll(postGroupMembers);
-      
-      // Add members from group
+      // Only use current group members
+      List<String> currentMembers = [];
       if (groupSnapshot.hasData && groupSnapshot.data != null) {
-        List<String> groupMembers = List<String>.from(groupSnapshot.data!['members'] ?? []);
-        allMembers.addAll(groupMembers);
+        currentMembers = List<String>.from(groupSnapshot.data!['members'] ?? []);
       }
 
-      List<String> uniqueMembers = allMembers.toList();
+      if (currentMembers.isEmpty) {
+        return SizedBox(height: 40);
+      }
 
       return SizedBox(
         height: 40,
         child: Stack(
           alignment: Alignment.centerLeft,
           children: [
-            for (var i = 0; i < uniqueMembers.length; i++)
+            for (var i = 0; i < currentMembers.length; i++)
               if (i < 4)
                 Positioned(
                   left: i * 24.0,
                   child: FutureBuilder<DocumentSnapshot>(
-                    future: FirebaseFirestore.instance.collection('users').doc(uniqueMembers[i]).get(),
+                    future: FirebaseFirestore.instance.collection('users').doc(currentMembers[i]).get(),
                     builder: (context, snapshot) {
                       if (snapshot.connectionState == ConnectionState.waiting) {
                         return CircleAvatar(
@@ -546,7 +542,7 @@ Widget _buildGroupMembersSection(BuildContext context, List<String> postGroupMem
                     },
                   ),
                 ),
-            if (uniqueMembers.length > 4)
+            if (currentMembers.length > 4)
               Positioned(
                 left: 4 * 24.0,
                 child: Container(
@@ -559,7 +555,7 @@ Widget _buildGroupMembersSection(BuildContext context, List<String> postGroupMem
                     backgroundColor: Colors.transparent,
                     radius: 18,
                     child: Text(
-                      '+${uniqueMembers.length - 4}',
+                      '+${currentMembers.length - 4}',
                       style: TextStyle(fontSize: 12, color: Colors.black, fontWeight: FontWeight.bold),
                     ),
                   ),
