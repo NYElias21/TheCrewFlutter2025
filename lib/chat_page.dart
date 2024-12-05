@@ -86,44 +86,46 @@ class _ChatPageState extends State<ChatPage> {
     );
   }
 
-  Widget _buildMessageComposer() {
-    return Container(
-      padding: EdgeInsets.symmetric(horizontal: 8.0),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        boxShadow: [
-          BoxShadow(
-            offset: Offset(0, -2),
-            blurRadius: 4,
-            color: Colors.black.withOpacity(0.1),
-          ),
-        ],
-      ),
-      child: Row(
-        children: [
-          IconButton(
-            icon: Icon(Icons.photo),
-            onPressed: () {
-              // TODO: Implement image sending
-            },
-          ),
-          Expanded(
-            child: TextField(
-              controller: _messageController,
-              decoration: InputDecoration(
-                hintText: 'Type a message',
-                border: InputBorder.none,
-              ),
+Widget _buildMessageComposer() {
+  return Container(
+    padding: EdgeInsets.symmetric(horizontal: 8.0),
+    decoration: BoxDecoration(
+      color: Colors.white,
+      boxShadow: [
+        BoxShadow(
+          offset: Offset(0, -2),
+          blurRadius: 4,
+          color: Colors.black.withOpacity(0.1),
+        ),
+      ],
+    ),
+    child: Row(
+      children: [
+        IconButton(
+          icon: Icon(Icons.photo),
+          onPressed: () {
+            // TODO: Implement image sending
+          },
+        ),
+        Expanded(
+          child: TextField(
+            controller: _messageController,
+            textInputAction: TextInputAction.send, // Add this line
+            onSubmitted: (_) => _sendMessage(), // Add this line
+            decoration: InputDecoration(
+              hintText: 'Type a message',
+              border: InputBorder.none,
             ),
           ),
-          IconButton(
-            icon: Icon(Icons.send),
-            onPressed: _sendMessage,
-          ),
-        ],
-      ),
-    );
-  }
+        ),
+        IconButton(
+          icon: Icon(Icons.send),
+          onPressed: _sendMessage,
+        ),
+      ],
+    ),
+  );
+}
 
   void _sendMessage() async {
     if (_messageController.text.isNotEmpty) {

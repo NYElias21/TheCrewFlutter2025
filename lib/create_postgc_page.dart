@@ -112,24 +112,26 @@ class _CreatePostGCPageState extends State<CreatePostGCPage> {
         },
       ),
       SizedBox(width: 12),
-      Expanded(
-        child: TextField(
-          controller: _postController,
-          maxLines: null,
-          decoration: InputDecoration(
-            hintText: "What's going on?",
-            hintStyle: TextStyle(
-              color: Colors.grey[500],
-              fontSize: 16,
-            ),
-            border: InputBorder.none,
-          ),
-          style: TextStyle(
-            fontSize: 16,
-            color: Colors.black,
-          ),
-        ),
+Expanded(
+  child: TextField(
+    controller: _postController,
+    maxLines: null,
+    textInputAction: TextInputAction.done, 
+    onEditingComplete: () => FocusScope.of(context).unfocus(), 
+    decoration: InputDecoration(
+      hintText: "What's going on?",
+      hintStyle: TextStyle(
+        color: Colors.grey[500],
+        fontSize: 16,
       ),
+      border: InputBorder.none,
+    ),
+    style: TextStyle(
+      fontSize: 16,
+      color: Colors.black,
+    ),
+  ),
+),
     ],
   ),
 ),

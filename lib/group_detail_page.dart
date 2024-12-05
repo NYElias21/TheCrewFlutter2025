@@ -2833,25 +2833,27 @@ Container(
       ),
       // Message input
       Expanded(
-        child: TextField(
-          controller: _messageController,
-          decoration: InputDecoration(
-            hintText: 'Type a message...',
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(24),
-              borderSide: BorderSide.none,
-            ),
-            filled: true,
-            fillColor: Colors.grey[100],
-            contentPadding: EdgeInsets.symmetric(
-              horizontal: 16,
-              vertical: 12,
-            ),
-          ),
-          maxLines: null,
-          textCapitalization: TextCapitalization.sentences,
-        ),
+  child: TextField(
+    controller: _messageController,
+    textInputAction: TextInputAction.done,  // Add this line
+    onEditingComplete: () => FocusScope.of(context).unfocus(),  // Add this line
+    decoration: InputDecoration(
+      hintText: 'Type a message...',
+      border: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(24),
+        borderSide: BorderSide.none,
       ),
+      filled: true,
+      fillColor: Colors.grey[100],
+      contentPadding: EdgeInsets.symmetric(
+        horizontal: 16,
+        vertical: 12,
+      ),
+    ),
+    maxLines: null,
+    textCapitalization: TextCapitalization.sentences,
+  ),
+),
       // Send button
       IconButton(
         icon: Icon(Icons.send, color: Colors.blue),
