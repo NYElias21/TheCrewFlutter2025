@@ -222,7 +222,7 @@ Widget _buildSearchResults() {
                   style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
                 ),
                 Text(
-                  'What Locals are loving rn',
+                  'What locals are loving right now!',
                   style: TextStyle(fontSize: 16, color: Colors.grey[600]),
                 ),
               ],
@@ -357,7 +357,7 @@ Widget _buildTrendingPosts() {
       }
 
       return Container(
-        height: 460,
+        height: 340, // Reduced from 420 to minimize extra space
         child: ListView.builder(
           scrollDirection: Axis.horizontal,
           itemCount: snapshot.data!.length,
@@ -380,10 +380,6 @@ Widget _buildTrendingPosts() {
                         builder: (context) => PostDetailPage(post: postDoc),
                       ),
                     );
-                  } else {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(content: Text('Post not found')),
-                    );
                   }
                 } catch (e) {
                   ScaffoldMessenger.of(context).showSnackBar(
@@ -393,105 +389,144 @@ Widget _buildTrendingPosts() {
               },
               child: Container(
                 width: MediaQuery.of(context).size.width * 0.8,
-                margin: EdgeInsets.only(right: 16),
+                margin: EdgeInsets.only(right: 16, bottom: 8), // Added bottom margin
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Container(
-                      width: 40,
-                      height: 40,
-                      alignment: Alignment.center,
-                      decoration: BoxDecoration(
-                        color: Colors.black,
-                        shape: BoxShape.circle,
-                      ),
-                      child: Text(
-                        '${index + 1}',
-                        style: TextStyle(
-                          fontSize: 24,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.white,
-                        ),
-                      ),
-                    ),
-                    SizedBox(height: 8),
-                    // Use error handling for main image
-                    ClipRRect(
-                      borderRadius: BorderRadius.circular(12),
-                      child: AspectRatio(
-                        aspectRatio: 4/3,
-                        child: Image.network(
-                          post.imageUrls[0],
-                          fit: BoxFit.cover,
-                          errorBuilder: (context, error, stackTrace) {
-                            return Container(
-                              color: Colors.grey[300],
-                              child: Icon(Icons.error),
-                            );
-                          },
-                        ),
-                      ),
-                    ),
-                    SizedBox(height: 12),
-                    Row(
-                      mainAxisSize: MainAxisSize.min,
+                    Stack(
                       children: [
-                        Icon(Icons.favorite, size: 16, color: Colors.red),
-                        SizedBox(width: 4),
-                        Text('${post.likes}'),
-                        SizedBox(width: 16),
-                        Icon(Icons.comment, size: 16),
-                        SizedBox(width: 4),
-                        Text('${post.comments}'),
-                        SizedBox(width: 16),
-                        Icon(Icons.remove_red_eye, size: 16),
-                        SizedBox(width: 4),
-                        Text('${post.views}'),
-                      ],
-                    ),
-                    SizedBox(height: 12),
-                    Row(
-                      children: [
-                        // Use the same avatar builder from PostDetailPage
-                        FutureBuilder<DocumentSnapshot>(
-                          future: FirebaseFirestore.instance
-                              .collection('users')
-                              .doc(post.userId)
-                              .get(),
-                          builder: (context, snapshot) {
-                            String userPhotoUrl = '';
-                            if (snapshot.hasData && snapshot.data != null) {
-                              userPhotoUrl = (snapshot.data!.data() as Map<String, dynamic>)?['photoURL'] ?? '';
-                            }
-                            return _buildUserAvatar(userPhotoUrl, radius: 16);
-                          },
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(12),
+                          child: AspectRatio(
+                            aspectRatio: 4/3,
+                            child: Image.network(
+                              post.imageUrls[0],
+                              fit: BoxFit.cover,
+                              errorBuilder: (context, error, stackTrace) {
+                                return Container(
+                                  color: Colors.grey[200],
+                                  child: Icon(Icons.error),
+                                );
+                              },
+                            ),
+                          ),
                         ),
-                        SizedBox(width: 8),
-                        Expanded(
-                          child: Text(
-                            post.username,
-                            style: TextStyle(fontWeight: FontWeight.bold),
-                            overflow: TextOverflow.ellipsis,
+                        Positioned.fill(
+                          child: DecoratedBox(
+                            decoration: BoxDecoration(
+                              borderRadius: BorderRadius.circular(12),
+                              gradient: LinearGradient(
+                                begin: Alignment.bottomCenter,
+                                end: Alignment.center,
+                                colors: [
+                                  Colors.black.withOpacity(0.7),
+                                  Colors.transparent,
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
+                        Positioned(
+                          top: 12,
+                          left: 12,
+                          child: Container(
+                            width: 40,
+                            height: 40,
+                            alignment: Alignment.center,
+                            decoration: BoxDecoration(
+                              color: Colors.black,
+                              shape: BoxShape.circle,
+                            ),
+                            child: Text(
+                              '${index + 1}',
+                              style: TextStyle(
+                                fontSize: 24,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.white,
+                              ),
+                            ),
+                          ),
+                        ),
+                        Positioned(
+                          left: 16,
+                          right: 16,
+                          bottom: 16,
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                post.title,
+                                style: TextStyle(
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.white,
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                              SizedBox(height: 4),
+                              Text(
+                                post.location,
+                                style: TextStyle(
+                                  fontSize: 14,
+                                  color: Colors.white.withOpacity(0.9),
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ],
                           ),
                         ),
                       ],
                     ),
-                    SizedBox(height: 8),
-                    Text(
-                      post.title,
-                      style: TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
-                      ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    Text(
-                      post.location,
-                      style: TextStyle(color: Colors.grey[600]),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
+                    SizedBox(height: 8), // Reduced from 12 to 8
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Row(
+                            children: [
+                              FutureBuilder<DocumentSnapshot>(
+                                future: FirebaseFirestore.instance
+                                    .collection('users')
+                                    .doc(post.userId)
+                                    .get(),
+                                builder: (context, snapshot) {
+                                  String userPhotoUrl = '';
+                                  if (snapshot.hasData && snapshot.data != null) {
+                                    userPhotoUrl = (snapshot.data!.data() as Map<String, dynamic>)?['photoURL'] ?? '';
+                                  }
+                                  return _buildUserAvatar(userPhotoUrl, radius: 16);
+                                },
+                              ),
+                              SizedBox(width: 8),
+                              Expanded(
+                                child: Text(
+                                  post.username,
+                                  style: TextStyle(fontWeight: FontWeight.bold),
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(Icons.favorite, size: 16, color: Colors.red),
+                            SizedBox(width: 4),
+                            Text('${post.likes}'),
+                            SizedBox(width: 16),
+                            Icon(Icons.comment, size: 16),
+                            SizedBox(width: 4),
+                            Text('${post.comments}'),
+                            SizedBox(width: 16),
+                            Icon(Icons.remove_red_eye, size: 16),
+                            SizedBox(width: 4),
+                            Text('${post.views}'),
+                          ],
+                        ),
+                      ],
                     ),
                   ],
                 ),
@@ -614,135 +649,124 @@ Widget _buildPromotionalBanner() {
                 );
 
                 return Container(
-                  margin: EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
                   decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(20),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withOpacity(0.2),
-                        blurRadius: 8,
-                        offset: Offset(0, 4),
-                      ),
-                    ],
+                    color: Colors.black,
                   ),
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(20),
-                    child: Stack(
-                      fit: StackFit.expand,
-                      children: [
-                        // Background Image
-                        Image.network(
-                          promotion.imageUrl,
-                          fit: BoxFit.cover,
-                          errorBuilder: (context, error, stackTrace) {
-                            return Container(
-                              color: Colors.grey[300],
-                              child: Icon(Icons.error),
-                            );
-                          },
-                        ),
-                        // Gradient Overlay
-                        Container(
-                          decoration: BoxDecoration(
-                            gradient: LinearGradient(
-                              begin: Alignment.topCenter,
-                              end: Alignment.bottomCenter,
-                              colors: [
-                                Colors.transparent,
-                                Colors.black.withOpacity(0.8),
-                              ],
-                              stops: [0.5, 1.0], // Adjusted gradient stops
-                            ),
+                  child: Stack(
+                    fit: StackFit.expand,
+                    children: [
+                      // Background Image
+                      Image.network(
+                        promotion.imageUrl,
+                        fit: BoxFit.cover,
+                        errorBuilder: (context, error, stackTrace) {
+                          return Container(
+                            color: Colors.grey[300],
+                            child: Icon(Icons.error),
+                          );
+                        },
+                      ),
+                      // Gradient Overlay
+                      Container(
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            begin: Alignment.topCenter,
+                            end: Alignment.bottomCenter,
+                            colors: [
+                              Colors.transparent,
+                              Colors.black.withOpacity(0.7),
+                            ],
+                            stops: [0.5, 1.0],
                           ),
                         ),
-                        // Content
-                        Padding(
-                          padding: EdgeInsets.all(24.0),
-                          child: Column(
-                            mainAxisAlignment: MainAxisAlignment.end,
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Row(
-                                crossAxisAlignment: CrossAxisAlignment.end,
-                                children: [
-                                  // Left side - Title and Subtitle
-                                  Expanded(
-                                    child: Column(
-                                      crossAxisAlignment: CrossAxisAlignment.start,
-                                      mainAxisSize: MainAxisSize.min,
-                                      children: [
-                                        Text(
-                                          promotion.title,
-                                          style: TextStyle(
-                                            color: Colors.white,
-                                            fontSize: 26, // Increased font size
-                                            fontWeight: FontWeight.w800, // Made bolder
-                                            letterSpacing: -0.5, // Tighter letter spacing
-                                            height: 1.1, // Tighter line height
-                                          ),
-                                        ),
-                                        SizedBox(height: 8), // Increased spacing
-                                        Text(
-                                          promotion.subtitle,
-                                          style: TextStyle(
-                                            color: Colors.white.withOpacity(0.95),
-                                            fontSize: 18, // Increased font size
-                                            fontWeight: FontWeight.w400,
-                                            letterSpacing: 0.1,
-                                            height: 1.2,
-                                          ),
-                                          maxLines: 2,
-                                          overflow: TextOverflow.ellipsis,
-                                        ),
-                                      ],
+                      ),
+                      // Content
+                      Padding(
+                        padding: EdgeInsets.symmetric(horizontal: 24.0, vertical: 20.0),
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            // Title section at the top
+                            Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  promotion.title,
+                                  style: TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 32,
+                                    fontWeight: FontWeight.w800,
+                                    letterSpacing: -0.5,
+                                    height: 1.1,
+                                  ),
+                                ),
+                              ],
+                            ),
+                            // Bottom section with subtitle and button
+                            Row(
+                              crossAxisAlignment: CrossAxisAlignment.end,
+                              children: [
+                                Expanded(
+                                  child: Padding(
+                                    padding: EdgeInsets.only(bottom: 24),
+                                    child: Text(
+                                      promotion.subtitle,
+                                      style: TextStyle(
+                                        color: Colors.white.withOpacity(0.95),
+                                        fontSize: 18,
+                                        fontWeight: FontWeight.w400,
+                                        letterSpacing: 0.1,
+                                        height: 1.2,
+                                      ),
+                                      maxLines: 2,
+                                      overflow: TextOverflow.ellipsis,
                                     ),
                                   ),
-                                  SizedBox(width: 16), // Added spacing
-                                  // Right side - More button
-                                  Container(
-                                    decoration: BoxDecoration(
-                                      color: Colors.white,
-                                      borderRadius: BorderRadius.circular(25), // More rounded
-                                    ),
-                                    child: Material(
-                                      color: Colors.transparent,
-                                      child: InkWell(
-                                        onTap: () {
-                                          // Handle more button tap
-                                        },
-                                        borderRadius: BorderRadius.circular(25),
-                                        child: Padding(
-                                          padding: EdgeInsets.symmetric(
-                                            horizontal: 20,
-                                            vertical: 10,
-                                          ),
-                                          child: Text(
-                                            'More',
-                                            style: TextStyle(
-                                              color: Colors.black,
-                                              fontSize: 15,
-                                              fontWeight: FontWeight.w600,
-                                              letterSpacing: 0.2,
-                                            ),
+                                ),
+                                Container(
+                                  decoration: BoxDecoration(
+                                    color: Colors.white,
+                                    borderRadius: BorderRadius.circular(25),
+                                  ),
+                                  child: Material(
+                                    color: Colors.transparent,
+                                    child: InkWell(
+                                      onTap: () {
+                                        // Handle more button tap
+                                      },
+                                      borderRadius: BorderRadius.circular(25),
+                                      child: Padding(
+                                        padding: EdgeInsets.symmetric(
+                                          horizontal: 20,
+                                          vertical: 10,
+                                        ),
+                                        child: Text(
+                                          'More',
+                                          style: TextStyle(
+                                            color: Colors.black,
+                                            fontSize: 15,
+                                            fontWeight: FontWeight.w600,
+                                            letterSpacing: 0.2,
                                           ),
                                         ),
                                       ),
                                     ),
                                   ),
-                                ],
-                              ),
-                            ],
-                          ),
+                                ),
+                              ],
+                            ),
+                          ],
                         ),
-                      ],
-                    ),
+                      ),
+                    ],
                   ),
                 );
               },
             ),
             // Page Indicators
             Positioned(
-              bottom: 30, // Moved indicators up a bit
+              bottom: 12,
               left: 0,
               right: 0,
               child: Row(
@@ -750,7 +774,7 @@ Widget _buildPromotionalBanner() {
                 children: List.generate(
                   snapshot.data!.docs.length,
                   (index) => Container(
-                    width: 6, // Slightly smaller dots
+                    width: 6,
                     height: 6,
                     margin: EdgeInsets.symmetric(horizontal: 4),
                     decoration: BoxDecoration(
