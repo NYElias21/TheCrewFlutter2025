@@ -585,12 +585,18 @@ Widget _buildCollections() {
           itemBuilder: (context, index) {
             final collection = snapshot.data!.docs[index];
             final data = collection.data() as Map<String, dynamic>;
+            final isDarkMode = Theme.of(context).brightness == Brightness.dark;
             
             return Container(
               decoration: BoxDecoration(
-                // Use theme colors instead of hardcoded colors
-                color: Theme.of(context).colorScheme.surface,
+                // Use theme-aware colors
+                color: Theme.of(context).cardColor,
                 borderRadius: BorderRadius.circular(12),
+                border: Border.all(
+                  color: isDarkMode 
+                    ? Colors.grey.withOpacity(0.3)
+                    : Colors.grey.withOpacity(0.2),
+                ),
               ),
               child: Row(
                 children: [
@@ -613,8 +619,8 @@ Widget _buildCollections() {
                         data['title'],
                         style: TextStyle(
                           fontWeight: FontWeight.bold,
-                          // Use theme color for text
-                          color: Theme.of(context).colorScheme.onSurface,
+                          // Use theme-aware text color
+                          color: Theme.of(context).textTheme.bodyLarge?.color,
                         ),
                       ),
                     ),
