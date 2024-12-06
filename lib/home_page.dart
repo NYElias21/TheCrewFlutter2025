@@ -79,7 +79,6 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
                 return <Widget>[
                   SliverAppBar(
                     title: _buildAppBarTitle(),
-                    backgroundColor: Colors.white,
                     pinned: true,
                     floating: true,
                     forceElevated: innerBoxIsScrolled,
@@ -127,41 +126,40 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
 
   Widget _buildAppBarTitle() {
     if (_currentFeed == 'Following') {
-      return Text(
-        'TheCrew',
-        style: TextStyle(color: Colors.black),
-      );
-    } else {
-      return Row(
-        children: [
-          GestureDetector(
-            onTap: () {
-              _showCitySelectorModal(context);
-            },
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  _selectedCity,
-                  style: TextStyle(color: Colors.black, fontSize: 14),
-                ),
-                Icon(Icons.arrow_drop_down, color: Colors.black),
-              ],
+  return Text(
+    'TheCrew',
+    style: TextStyle(fontWeight: FontWeight.bold),  // Remove color: Colors.black
+  );
+} else {
+  return Row(
+    children: [
+      GestureDetector(
+        onTap: () {
+          _showCitySelectorModal(context);
+        },
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              _selectedCity,
+              style: TextStyle(fontSize: 14),  // Remove color: Colors.black
             ),
+            Icon(Icons.arrow_drop_down),  // Remove color: Colors.black
+          ],
+        ),
+      ),
+      Expanded(
+        child: Center(
+          child: Text(
+            'TheCrew',
+            style: TextStyle(fontWeight: FontWeight.bold),  // Remove color: Colors.black
           ),
-          Expanded(
-            child: Center(
-              child: Text(
-                'TheCrew',
-                style: TextStyle(color: Colors.black),
-              ),
-            ),
-          ),
-          // Add a placeholder to balance the layout
-          SizedBox(width: 100),
-        ],
-      );
-    }
+        ),
+      ),
+      SizedBox(width: 100),
+    ],
+  );
+}
   }
 
   void _showCitySelectorModal(BuildContext context) {

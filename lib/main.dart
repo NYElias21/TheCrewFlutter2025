@@ -9,6 +9,7 @@ import 'settings_page.dart';
 import 'auth_pages.dart';
 import 'chat_page.dart';
 import 'theme_provider.dart';
+import 'app_theme.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -22,53 +23,33 @@ class MyApp extends StatelessWidget {
   final ThemeProvider themeProvider = ThemeProvider();
 
   @override
-  Widget build(BuildContext context) {
-    return ChangeNotifierProvider.value(
-      value: themeProvider,
-      child: Consumer<ThemeProvider>(
-        builder: (context, themeProvider, child) {
-          return MaterialApp(
-            title: 'The Crew App',
-            theme: ThemeData.light().copyWith(
-              colorScheme: ColorScheme.light(
-                primary: Colors.blue,
-                secondary: Colors.blueAccent,
-              ),
-              appBarTheme: AppBarTheme(
-                backgroundColor: Colors.white,
-                foregroundColor: Colors.black,
-                elevation: 0,
-              ),
+Widget build(BuildContext context) {
+  return ChangeNotifierProvider.value(
+    value: themeProvider,
+    child: Consumer<ThemeProvider>(
+      builder: (context, themeProvider, child) {
+        return MaterialApp(
+          title: 'The Crew App',
+          theme: AppTheme.lightTheme,
+          darkTheme: AppTheme.darkTheme,
+          themeMode: themeProvider.isDarkMode ? ThemeMode.dark : ThemeMode.light,
+          initialRoute: '/',
+          routes: {
+            '/': (context) => _handleAuth(),
+            '/login': (context) => LoginPage(),
+            '/home': (context) => HomePage(),
+            '/settings': (context) => SettingsPage(),
+            '/chat': (context) => ChatPage(
+              chatId: 'defaultChatId',
+              chatName: 'Default Chat',
+              chatAvatar: 'https://example.com/default_avatar.png',
             ),
-            darkTheme: ThemeData.dark().copyWith(
-              colorScheme: ColorScheme.dark(
-                primary: Colors.blue,
-                secondary: Colors.blueAccent,
-              ),
-              appBarTheme: AppBarTheme(
-                backgroundColor: Color(0xFF1E1E1E),
-                foregroundColor: Colors.white,
-                elevation: 0,
-              ),
-            ),
-            themeMode: themeProvider.isDarkMode ? ThemeMode.dark : ThemeMode.light,
-            initialRoute: '/',
-            routes: {
-              '/': (context) => _handleAuth(),
-              '/login': (context) => LoginPage(),
-              '/home': (context) => HomePage(),
-              '/settings': (context) => SettingsPage(),
-              '/chat': (context) => ChatPage(
-                chatId: 'defaultChatId',
-                chatName: 'Default Chat',
-                chatAvatar: 'https://example.com/default_avatar.png',
-              ),
-            },
-          );
-        },
-      ),
-    );
-  }
+          },
+        );
+      },
+    ),
+  );
+}
 
   Widget _handleAuth() {
     return StreamBuilder<User?>(

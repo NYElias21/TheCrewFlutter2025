@@ -257,7 +257,7 @@ Future<void> _sharePost() async {
             child: Container(
               height: MediaQuery.of(context).size.height * 0.85,
               decoration: BoxDecoration(
-                color: Colors.white,
+                color: Theme.of(context).colorScheme.surface,
                 borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
               ),
               child: Column(
@@ -267,7 +267,7 @@ Future<void> _sharePost() async {
                     width: 40,
                     height: 4,
                     decoration: BoxDecoration(
-                      color: Colors.grey[300],
+                      color: Theme.of(context).colorScheme.onSurface.withOpacity(0.2),
                       borderRadius: BorderRadius.circular(2),
                     ),
                   ),
@@ -282,6 +282,7 @@ Future<void> _sharePost() async {
                           style: TextStyle(
                             fontSize: 20,
                             fontWeight: FontWeight.bold,
+                            color: Theme.of(context).colorScheme.onSurface,
                           ),
                         ),
                         IconButton(
@@ -727,20 +728,22 @@ Widget build(BuildContext context) {
 
   Widget _buildAppBar(BuildContext context, String username) {
     return Container(
-      color: Colors.white,
-      child: SafeArea(
-        bottom: false,
-        child: Container(
-          height: 56,
-          padding: EdgeInsets.symmetric(horizontal: 16),
-          child: Row(
-            children: [
-              IconButton(
-                icon: Icon(Icons.arrow_back),
-                onPressed: () => Navigator.of(context).pop(),
-                padding: EdgeInsets.zero,
-                constraints: BoxConstraints(),
+    child: SafeArea(
+      bottom: false,
+      child: Container(
+        height: 56,
+        padding: EdgeInsets.symmetric(horizontal: 16),
+        child: Row(
+          children: [
+            IconButton(
+              icon: Icon(
+                Icons.arrow_back,
+                color: Theme.of(context).colorScheme.onSurface, // Add this
               ),
+              onPressed: () => Navigator.of(context).pop(),
+              padding: EdgeInsets.zero,
+              constraints: BoxConstraints(),
+            ),
               SizedBox(width: 8),
               GestureDetector(
                 onTap: () => _navigateToProfile(context, postUserId),
@@ -920,7 +923,6 @@ Widget _buildPostDetails(String title, String description, String postType) {
   final data = widget.post.data() as Map<String, dynamic>;
   final activities = data['activities'] as List<dynamic>?;
 
-  // Initialize uniqueActivities
   uniqueActivities = {};
   activities?.forEach((activity) {
     if (!uniqueActivities.containsKey(activity['name'])) {
@@ -935,13 +937,20 @@ Widget _buildPostDetails(String title, String description, String postType) {
       children: [
         Text(
           title,
-          style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+          style: TextStyle(
+            fontSize: 20, 
+            fontWeight: FontWeight.bold,
+            color: Theme.of(context).colorScheme.onSurface, // Add this
+          ),
         ),
         SizedBox(height: 8),
         RichText(
           text: TextSpan(
             children: _buildHashtagTextSpans(description, context),
-            style: TextStyle(fontSize: 16, color: Colors.black),
+            style: TextStyle(
+              fontSize: 16,
+              color: Theme.of(context).colorScheme.onSurface, // Update this
+            ),
           ),
         ),
         SizedBox(height: 16),
@@ -959,7 +968,10 @@ Widget _buildPostDetails(String title, String description, String postType) {
                     margin: EdgeInsets.only(bottom: 8),
                     child: RichText(
                       text: TextSpan(
-                        style: TextStyle(fontSize: 16, color: Colors.black),
+                        style: TextStyle(
+                          fontSize: 16,
+                          color: Theme.of(context).colorScheme.onSurface, // Update this
+                        ),
                         children: [
                           TextSpan(text: '${index + 1}. '),
                           TextSpan(
@@ -967,14 +979,14 @@ Widget _buildPostDetails(String title, String description, String postType) {
                             style: TextStyle(
                               color: Color(0xFF2E7D32),
                               fontWeight: FontWeight.w500,
-                              //decoration: TextDecoration.underline, // Added underline to show it's interactive
                             ),
                           ),
                           if (activity['description'] != null)
                             TextSpan(
                               text: ': ${activity['description']}',
                               style: TextStyle(
-                                decoration: TextDecoration.none, // Ensure description isn't underlined
+                                color: Theme.of(context).colorScheme.onSurface, // Add this
+                                decoration: TextDecoration.none,
                               ),
                             ),
                         ],
@@ -988,7 +1000,11 @@ Widget _buildPostDetails(String title, String description, String postType) {
           }).toList(),
           Text(
             'Activity Overview',
-            style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+            style: TextStyle(
+              fontSize: 20,
+              fontWeight: FontWeight.bold,
+              color: Theme.of(context).colorScheme.onSurface, // Add this
+            ),
           ),
           SizedBox(height: 8),
           _buildOverviewMap(),
@@ -996,7 +1012,10 @@ Widget _buildPostDetails(String title, String description, String postType) {
         ],
         Text(
           _formatPostTime(createdAt ?? Timestamp.now()),
-          style: TextStyle(color: Colors.grey, fontSize: 14),
+          style: TextStyle(
+            color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6), // Update this
+            fontSize: 14
+          ),
         ),
       ],
     ),
@@ -1273,7 +1292,13 @@ Widget _buildCommentInput() {
   return Container(
     padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
     decoration: BoxDecoration(
-      border: Border(top: BorderSide(color: Colors.grey[300]!, width: 0.5)),
+      color: Theme.of(context).colorScheme.surface,
+      border: Border(
+        top: BorderSide(
+          color: Theme.of(context).colorScheme.onSurface.withOpacity(0.1),
+          width: 0.5
+        ),
+      ),
     ),
     child: Column(
       mainAxisSize: MainAxisSize.min,
@@ -1285,12 +1310,15 @@ Widget _buildCommentInput() {
               children: [
                 Text(
                   'Replying to ',
-                  style: TextStyle(color: Colors.grey[600], fontSize: 12),
+                  style: TextStyle(
+                    color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
+                    fontSize: 12
+                  ),
                 ),
                 Text(
                   replyingTo!.username,
                   style: TextStyle(
-                    color: Colors.grey[600],
+                    color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
                     fontWeight: FontWeight.bold,
                     fontSize: 12,
                   ),
@@ -1302,7 +1330,11 @@ Widget _buildCommentInput() {
                       replyingTo = null;
                     });
                   },
-                  child: Icon(Icons.close, size: 16, color: Colors.grey[600]),
+                  child: Icon(
+                    Icons.close,
+                    size: 16,
+                    color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6)
+                  ),
                 ),
               ],
             ),
@@ -1317,14 +1349,36 @@ Widget _buildCommentInput() {
                   hintText: replyingTo != null 
                       ? 'Write a reply...' 
                       : 'Write a comment...',
+                  hintStyle: TextStyle(
+                    color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6)
+                  ),
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(20),
-                    borderSide: BorderSide(color: Colors.grey[300]!),
+                    borderSide: BorderSide(
+                      color: Theme.of(context).colorScheme.onSurface.withOpacity(0.1)
+                    ),
                   ),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(20),
+                    borderSide: BorderSide(
+                      color: Theme.of(context).colorScheme.onSurface.withOpacity(0.1)
+                    ),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(20),
+                    borderSide: BorderSide(
+                      color: Theme.of(context).colorScheme.primary
+                    ),
+                  ),
+                  fillColor: Theme.of(context).colorScheme.surface,
+                  filled: true,
                   contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                   isDense: true,
                 ),
-                style: TextStyle(fontSize: 14),
+                style: TextStyle(
+                  fontSize: 14,
+                  color: Theme.of(context).colorScheme.onSurface
+                ),
               ),
             ),
             SizedBox(width: 8),
@@ -1339,7 +1393,10 @@ Widget _buildCommentInput() {
               },
               child: Text(
                 replyingTo != null ? 'Reply' : 'Post',
-                style: TextStyle(color: Colors.blue, fontWeight: FontWeight.bold),
+                style: TextStyle(
+                  color: Theme.of(context).colorScheme.primary,
+                  fontWeight: FontWeight.bold
+                ),
               ),
             ),
           ],
@@ -1645,6 +1702,7 @@ void _deleteComment(Comment comment) {
 Widget _buildActionBar() {
     return Container(
       padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+      color: Theme.of(context).colorScheme.surface,
       child: Column(
         children: [
           Row(

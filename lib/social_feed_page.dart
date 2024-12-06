@@ -29,40 +29,37 @@ class _SocialFeedPageState extends State<SocialFeedPage> with SingleTickerProvid
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Colors.white,
-      appBar: AppBar(
-        title: Text(
-          'Your Crew',
-          style: TextStyle(
-            color: Colors.black,
-            fontWeight: FontWeight.bold,
-          ),
-        ),
-        backgroundColor: Colors.white,
-        elevation: 0,
-        centerTitle: true,
-        actions: [
-          IconButton(
-            icon: Icon(Icons.notifications, color: Colors.black),
-            onPressed: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(builder: (context) => NotificationsPage()),
-              );
-            },
-          ),
-        ],
-        bottom: TabBar(
-          controller: _tabController,
-          tabs: [
-            Tab(text: 'Discover Trips'),
-            Tab(text: 'Your Trips'),
-          ],
-          labelColor: Colors.black,
-          unselectedLabelColor: Colors.grey,
-        ),
+return Scaffold(
+  appBar: AppBar(
+    title: Text(
+      'Your Crew',
+      style: TextStyle(
+        fontWeight: FontWeight.bold,
       ),
+    ),
+    elevation: 0,
+    centerTitle: true,
+    actions: [
+      IconButton(
+        icon: Icon(Icons.notifications),
+        onPressed: () {
+          Navigator.push(
+            context,
+            MaterialPageRoute(builder: (context) => NotificationsPage()),
+          );
+        },
+      ),
+    ],
+    bottom: TabBar(
+      controller: _tabController,
+      tabs: [
+        Tab(text: 'Discover Trips'),
+        Tab(text: 'Your Trips'),
+      ],
+      labelColor: Theme.of(context).colorScheme.onSurface,
+      unselectedLabelColor: Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
+    ),
+  ),
       body: TabBarView(
         controller: _tabController,
         children: [

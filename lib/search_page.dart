@@ -170,34 +170,42 @@ void initState() {
 @override
 Widget build(BuildContext context) {
   return Scaffold(
-    appBar: AppBar( // Add this parameter name
-      title: TextField(
-        controller: _searchController,
-        decoration: InputDecoration(
-          hintText: 'Search experiences, places, or hashtags...',
-          border: InputBorder.none,
-          prefixIcon: Icon(Icons.search),
-          suffixIcon: _searchController.text.isNotEmpty
-            ? IconButton(
-                icon: Icon(Icons.clear),
-                onPressed: () {
-                  _searchController.clear();
-                  setState(() {});
-                },
-              )
-            : null,
-        ),
-        onChanged: (value) {
-          if (_debounce?.isActive ?? false) _debounce!.cancel();
-          _debounce = Timer(const Duration(milliseconds: 500), () {
-            setState(() {});
-          });
-        },
+appBar: AppBar(
+  title: TextField(
+    controller: _searchController,
+    style: TextStyle(color: Theme.of(context).colorScheme.onSurface), // Add this
+    decoration: InputDecoration(
+      hintText: 'Search experiences, places, or hashtags...',
+      hintStyle: TextStyle(color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6)), // Add this
+      border: InputBorder.none,
+      prefixIcon: Icon(
+        Icons.search,
+        color: Theme.of(context).colorScheme.onSurface, // Add this
       ),
-      backgroundColor: Colors.white,
-      elevation: 0,
-      iconTheme: IconThemeData(color: Colors.black),
+      suffixIcon: _searchController.text.isNotEmpty
+        ? IconButton(
+            icon: Icon(
+              Icons.clear,
+              color: Theme.of(context).colorScheme.onSurface, // Add this
+            ),
+            onPressed: () {
+              _searchController.clear();
+              setState(() {});
+            },
+          )
+        : null,
     ),
+    onChanged: (value) {
+      if (_debounce?.isActive ?? false) _debounce!.cancel();
+      _debounce = Timer(const Duration(milliseconds: 500), () {
+        setState(() {});
+      });
+    },
+  ),
+  // Remove backgroundColor: Colors.white,
+  elevation: 0,
+  // Remove iconTheme: IconThemeData(color: Colors.black),
+),
     body: _buildSearchResults(),
   );
 }
@@ -580,7 +588,8 @@ Widget _buildCollections() {
             
             return Container(
               decoration: BoxDecoration(
-                color: Colors.grey[200],
+                // Use theme colors instead of hardcoded colors
+                color: Theme.of(context).colorScheme.surface,
                 borderRadius: BorderRadius.circular(12),
               ),
               child: Row(
@@ -604,6 +613,8 @@ Widget _buildCollections() {
                         data['title'],
                         style: TextStyle(
                           fontWeight: FontWeight.bold,
+                          // Use theme color for text
+                          color: Theme.of(context).colorScheme.onSurface,
                         ),
                       ),
                     ),

@@ -192,6 +192,7 @@ class _LocationDetailSheetState extends State<LocationDetailSheet> {
             style: TextStyle(
               fontSize: 24,
               fontWeight: FontWeight.w600,
+              color: Theme.of(context).colorScheme.onSurface,
             ),
           ),
         ),
@@ -279,6 +280,7 @@ class _LocationDetailSheetState extends State<LocationDetailSheet> {
                           style: TextStyle(
                             fontSize: 16,
                             fontWeight: FontWeight.w600,
+                            color: Theme.of(context).colorScheme.onSurface,
                           ),
                           maxLines: 2,
                           overflow: TextOverflow.ellipsis,
@@ -310,7 +312,7 @@ class _LocationDetailSheetState extends State<LocationDetailSheet> {
                             Text(
                               post['username'] ?? 'Unknown User',
                               style: TextStyle(
-                                color: Colors.grey[600],
+                                color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
                                 fontSize: 14,
                               ),
                             ),
@@ -329,7 +331,7 @@ class _LocationDetailSheetState extends State<LocationDetailSheet> {
                   post['description'],
                   style: TextStyle(
                     fontSize: 14,
-                    color: Colors.grey[600],
+                    color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
                   ),
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
@@ -346,7 +348,7 @@ class _LocationDetailSheetState extends State<LocationDetailSheet> {
     if (isLoading) {
       return Container(
         decoration: BoxDecoration(
-          color: Colors.white,
+          color: Theme.of(context).colorScheme.surface, 
           borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
         ),
         child: Center(child: CircularProgressIndicator()),
@@ -359,7 +361,7 @@ class _LocationDetailSheetState extends State<LocationDetailSheet> {
       maxChildSize: 0.95,
       builder: (_, controller) => Container(
         decoration: BoxDecoration(
-          color: Colors.white,
+          color: Theme.of(context).colorScheme.surface,
           borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
         ),
         child: Column(
@@ -372,7 +374,7 @@ class _LocationDetailSheetState extends State<LocationDetailSheet> {
                 width: 40,
                 height: 4,
                 decoration: BoxDecoration(
-                  color: Colors.grey[300],
+                  color: Theme.of(context).colorScheme.onSurface.withOpacity(0.2),
                   borderRadius: BorderRadius.circular(2),
                 ),
               ),
@@ -420,25 +422,35 @@ class _LocationDetailSheetState extends State<LocationDetailSheet> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        placeDetails?.name ?? widget.activity['name'] ?? '',
-                        style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
-                      ),
-                      SizedBox(height: 8),
-                      Row(
-                        children: [
-                          Text(placeDetails?.rating?.toString() ?? ''),
-                          Icon(Icons.star, color: Colors.amber, size: 16),
-                          Text(
-                            ' • ${placeDetails?.userRatingsTotal ?? 0} Google reviews',
-                            style: TextStyle(color: Colors.grey[600])
-                          ),
-                        ],
-                      ),
-                      if (placeDetails?.priceLevel != null)
-                        Text(
-                          '${_getPriceLevel(placeDetails?.priceLevel)} • ${placeDetails?.types?.first ?? 'Business'}',
-                          style: TextStyle(color: Colors.grey[600])
-                        ),
+            placeDetails?.name ?? widget.activity['name'] ?? '',
+            style: TextStyle(
+              fontSize: 24, 
+              fontWeight: FontWeight.bold,
+              color: Theme.of(context).colorScheme.onSurface,  // Add this
+            ),
+          ),
+          Row(
+            children: [
+              Text(
+                placeDetails?.rating?.toString() ?? '',
+                style: TextStyle(color: Theme.of(context).colorScheme.onSurface),  // Add this
+              ),
+              Icon(Icons.star, color: Colors.amber, size: 16),
+              Text(
+                ' • ${placeDetails?.userRatingsTotal ?? 0} Google reviews',
+                style: TextStyle(
+                  color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6)  // Update this
+                ),
+              ),
+            ],
+          ),
+          if (placeDetails?.priceLevel != null)
+            Text(
+              '${_getPriceLevel(placeDetails?.priceLevel)} • ${placeDetails?.types?.first ?? 'Business'}',
+              style: TextStyle(
+                color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6)  // Update this
+              ),
+            ),
                       SizedBox(height: 16),
                       _buildActionButtons(),
                       _buildFeaturedSection(),
@@ -477,18 +489,20 @@ class _LocationDetailSheetState extends State<LocationDetailSheet> {
     return '\$' * priceLevel;
   }
 
-  Widget _buildActionButton(String label, IconData icon, VoidCallback onPressed) {
-    return Expanded(
-      child: OutlinedButton.icon(
-        icon: Icon(icon, size: 18),
-        label: Text(label),
-        onPressed: onPressed,
-        style: OutlinedButton.styleFrom(
-          padding: EdgeInsets.symmetric(vertical: 8),
-          foregroundColor: Colors.black87,
-          side: BorderSide(color: Colors.grey[300]!),
+Widget _buildActionButton(String label, IconData icon, VoidCallback onPressed) {
+  return Expanded(
+    child: OutlinedButton.icon(
+      icon: Icon(icon, size: 18),
+      label: Text(label),
+      onPressed: onPressed,
+      style: OutlinedButton.styleFrom(
+        padding: EdgeInsets.symmetric(vertical: 8),
+        foregroundColor: Theme.of(context).colorScheme.onSurface,  // Update this
+        side: BorderSide(
+          color: Theme.of(context).colorScheme.onSurface.withOpacity(0.2)  // Update this
         ),
       ),
-    );
-  }
+    ),
+  );
+}
 }

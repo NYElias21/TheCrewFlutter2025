@@ -213,13 +213,20 @@ Future<void> _loadUserData() async {
     child: Column(
       children: [
         Text(
-          value.toString(),
-          style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-        ),
-        Text(
-          label,
-          style: TextStyle(fontSize: 14, color: Colors.grey),
-        ),
+  value.toString(),
+  style: TextStyle(
+    fontSize: 18, 
+    fontWeight: FontWeight.bold,
+    color: Theme.of(context).colorScheme.onSurface, // Add this
+  ),
+),
+Text(
+  label,
+  style: TextStyle(
+    fontSize: 14, 
+    color: Theme.of(context).colorScheme.onSurface.withOpacity(0.7), // Update color
+  ),
+),
       ],
     ),
   );
@@ -324,13 +331,16 @@ void _showUserList(String label) {
       length: 3,
       child: Column(
         children: [
-          TabBar(
-            tabs: [
-              Tab(icon: Icon(Icons.grid_on, color: Colors.black)),
-              Tab(icon: Icon(Icons.bookmark_border, color: Colors.black)),
-              Tab(icon: Icon(Icons.favorite_border, color: Colors.black)),
-            ],
-          ),
+TabBar(
+  tabs: [
+    Tab(icon: Icon(Icons.grid_on, 
+      color: Theme.of(context).colorScheme.onSurface)), // Update color
+    Tab(icon: Icon(Icons.bookmark_border, 
+      color: Theme.of(context).colorScheme.onSurface)), // Update color
+    Tab(icon: Icon(Icons.favorite_border, 
+      color: Theme.of(context).colorScheme.onSurface)), // Update color
+  ],
+),
           Container(
             height: MediaQuery.of(context).size.height * 0.5,
             child: TabBarView(
@@ -690,31 +700,34 @@ Widget _buildSavedPostsGrid() {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        automaticallyImplyLeading: widget.userId != null,
-        title: Text('@$_username', style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
-        backgroundColor: Colors.white,
-        elevation: 0,
-        actions: [
-          if (_userId == currentUser!.uid) ...[
-            IconButton(
-              icon: Icon(Icons.auto_awesome, color: Colors.black),
-              onPressed: () {
-                // TODO: Implement star functionality
-              },
-            ),
-            IconButton(
-              icon: Icon(Icons.settings, color: Colors.black),
-              onPressed: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (context) => SettingsPage()),
-                );
-              },
-            ),
-          ],
-        ],
+appBar: AppBar(
+  automaticallyImplyLeading: widget.userId != null,
+  title: Text(
+    '@$_username', 
+    style: TextStyle(fontWeight: FontWeight.bold)  // Remove color: Colors.black
+  ),
+  // Remove backgroundColor: Colors.white,
+  elevation: 0,
+  actions: [
+    if (_userId == currentUser!.uid) ...[
+      IconButton(
+        icon: Icon(Icons.auto_awesome),  // Remove color: Colors.black
+        onPressed: () {
+          // TODO: Implement star functionality
+        },
       ),
+      IconButton(
+        icon: Icon(Icons.settings),  // Remove color: Colors.black
+        onPressed: () {
+          Navigator.push(
+            context,
+            MaterialPageRoute(builder: (context) => SettingsPage()),
+          );
+        },
+      ),
+    ],
+  ],
+),
      body: _isLoading
     ? Center(child: CircularProgressIndicator())
     : SingleChildScrollView(
@@ -748,7 +761,7 @@ Widget _buildSavedPostsGrid() {
   Row(
     mainAxisAlignment: MainAxisAlignment.center,
     children: [
-    ElevatedButton(
+ElevatedButton(
   onPressed: () {
     Navigator.push(
       context,
@@ -765,8 +778,8 @@ Widget _buildSavedPostsGrid() {
   child: Text('Edit profile'),
   style: ElevatedButton.styleFrom(
     backgroundColor: Colors.transparent,
-    foregroundColor: Colors.black,
-    side: BorderSide(color: Colors.grey),
+    foregroundColor: Theme.of(context).colorScheme.onSurface, // Update color
+    side: BorderSide(color: Theme.of(context).colorScheme.onSurface.withOpacity(0.2)), // Update color
     shape: RoundedRectangleBorder(
       borderRadius: BorderRadius.circular(8),
     ),
@@ -778,26 +791,26 @@ Widget _buildSavedPostsGrid() {
 ),
 
     SizedBox(width: 2), // Reduced space between buttons
-    ElevatedButton(
-      onPressed: () {
-        // TODO: Implement share profile functionality
-      },
-      style: ElevatedButton.styleFrom(
-        backgroundColor: Colors.transparent, // Match background color
-        foregroundColor: Colors.black, // Icon color
-        side: BorderSide(color: Colors.grey), // Border color
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(8), // Rounded corners
-        ),
-        elevation: 0, // Remove shadow
-        padding: EdgeInsets.all(0), // Remove padding to make it consistent
-        minimumSize: Size(36, 36), // Reduced size to match the height
-        fixedSize: Size(36, 36), // Set a fixed size to ensure the button size is consistent
-      ),
-      child: Center(
-        child: Icon(Icons.ios_share, size: 20), // Use the ios_share icon
-      ),
+ElevatedButton(
+  onPressed: () {
+    // TODO: Implement share profile functionality
+  },
+  style: ElevatedButton.styleFrom(
+    backgroundColor: Colors.transparent,
+    foregroundColor: Theme.of(context).colorScheme.onSurface, // Update color
+    side: BorderSide(color: Theme.of(context).colorScheme.onSurface.withOpacity(0.2)), // Update color
+    shape: RoundedRectangleBorder(
+      borderRadius: BorderRadius.circular(8),
     ),
+    elevation: 0,
+    padding: EdgeInsets.all(0),
+    minimumSize: Size(36, 36),
+    fixedSize: Size(36, 36),
+  ),
+  child: Center(
+    child: Icon(Icons.ios_share, size: 20),
+  ),
+),
   ],
 )
 else
