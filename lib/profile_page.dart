@@ -9,6 +9,7 @@ import 'post_detail_page.dart';
 import 'settings_page.dart';
 import 'followers_following_page.dart';
 import 'edit_profile_page.dart';
+import 'views/saved_posts_view.dart';
 
 class ProfilePage extends StatefulWidget {
   final String? userId;
@@ -387,7 +388,10 @@ Widget _buildTabBar() {
               child: TabBarView(
                 children: [
                   _buildPostsGrid(),
-                  _buildSavedPostsGrid(),
+                  SavedPostsView(
+                    userId: _userId,
+                    isPrivate: isPrivateSaves,
+                  ),
                   _buildLikedPostsGrid(),
                 ],
               ),
