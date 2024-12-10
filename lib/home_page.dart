@@ -29,16 +29,17 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
     super.initState();
     _tabController = TabController(length: 2, vsync: this);
     _tabController.addListener(_handleTabSelection);
+    _currentFeed = _tabController.index == 0 ? 'Following' : 'For You';
     _updateChildren();
   }
 
-  void _handleTabSelection() {
-    if (_tabController.indexIsChanging) {
-      setState(() {
-        _currentFeed = _tabController.index == 0 ? 'Following' : 'For You';
-      });
-    }
+void _handleTabSelection() {
+    // Remove the indexIsChanging check to ensure it updates consistently
+    setState(() {
+      _currentFeed = _tabController.index == 0 ? 'Following' : 'For You';
+    });
   }
+
 
   @override
   void dispose() {
@@ -85,18 +86,23 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
                     centerTitle: true,
                     leading: _currentFeed == 'Following' ? Container() : null,
                     leadingWidth: _currentFeed == 'Following' ? 0 : null,
-                    bottom: PreferredSize(
-                      preferredSize: Size.fromHeight(48),
-                      child: TabBar(
-                        controller: _tabController,
-                        tabs: [
-                          Tab(text: 'Following'),
-                          Tab(text: 'For You'),
-                        ],
-                        labelColor: Colors.black,
-                        unselectedLabelColor: Colors.grey,
-                      ),
-                    ),
+bottom: PreferredSize(
+  preferredSize: Size.fromHeight(48),
+  child: TabBar(
+    controller: _tabController,
+    tabs: [
+      Tab(text: 'Following'),
+      Tab(text: 'For You'),
+    ],
+    labelColor: Theme.of(context).brightness == Brightness.dark 
+      ? Colors.white 
+      : Colors.black,
+    unselectedLabelColor: Theme.of(context).brightness == Brightness.dark 
+      ? Colors.grey[400] 
+      : Colors.grey,
+  ),
+),
+
                   )
                 ];
               },
@@ -124,43 +130,45 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
     );
   }
 
-  Widget _buildAppBarTitle() {
-    if (_currentFeed == 'Following') {
-  return Text(
-    'TheCrew',
-    style: TextStyle(fontWeight: FontWeight.bold),  // Remove color: Colors.black
-  );
-} else {
-  return Row(
-    children: [
-      GestureDetector(
-        onTap: () {
-          _showCitySelectorModal(context);
-        },
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(
-              _selectedCity,
-              style: TextStyle(fontSize: 14),  // Remove color: Colors.black
-            ),
-            Icon(Icons.arrow_drop_down),  // Remove color: Colors.black
-          ],
+Widget _buildAppBarTitle() {
+  print('Current feed: $_currentFeed');
+  
+  if (_currentFeed == 'Following') {
+    return Row(
+      children: [
+        Text(
+          'The Crew',
+          style: TextStyle(fontWeight: FontWeight.bold),
         ),
-      ),
-      Expanded(
-        child: Center(
-          child: Text(
-            'TheCrew',
-            style: TextStyle(fontWeight: FontWeight.bold),  // Remove color: Colors.black
+      ],
+    );
+  } else {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Text(
+          'The Crew',
+          style: TextStyle(fontWeight: FontWeight.bold),
+        ),
+        GestureDetector(
+          onTap: () {
+            _showCitySelectorModal(context);
+          },
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                _selectedCity,
+                style: TextStyle(fontSize: 14),
+              ),
+              Icon(Icons.arrow_drop_down),
+            ],
           ),
         ),
-      ),
-      SizedBox(width: 100),
-    ],
-  );
-}
+      ],
+    );
   }
+}
 
   void _showCitySelectorModal(BuildContext context) {
     showModalBottomSheet(
@@ -551,49 +559,63 @@ String _formatPostTime(Timestamp timestamp) {
 }
 
 
- Widget _buildForYouFeed() {
-    return Column(
-      children: [
-        Container(
-          height: 40,
-          margin: EdgeInsets.symmetric(vertical: 8),
-          child: ListView.builder(
-            scrollDirection: Axis.horizontal,
-            itemCount: _categories.length,
-            itemBuilder: (context, index) {
-              return Padding(
-                padding: EdgeInsets.symmetric(horizontal: 4),
-                child: FilterChip(
-                  label: Text(_categories[index]),
-                  selected: _selectedCategory == _categories[index],
-                  onSelected: (selected) {
-                    setState(() {
-                      _selectedCategory = _categories[index];
-                    });
-                  },
-                  backgroundColor: Colors.transparent,
-                  selectedColor: Colors.black.withOpacity(0.1),
-                  labelStyle: TextStyle(
-                    color: _selectedCategory == _categories[index] ? Colors.black : Colors.grey,
-                    fontWeight: _selectedCategory == _categories[index] ? FontWeight.bold : FontWeight.normal,
-                  ),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(20),
-                    side: BorderSide(
-                      color: _selectedCategory == _categories[index] ? Colors.black : Colors.grey,
-                    ),
+Widget _buildForYouFeed() {
+  return Column(
+    children: [
+      Container(
+        height: 40,
+        margin: EdgeInsets.symmetric(vertical: 8),
+        child: ListView.builder(
+          scrollDirection: Axis.horizontal,
+          itemCount: _categories.length,
+          itemBuilder: (context, index) {
+            return Padding(
+              padding: EdgeInsets.symmetric(horizontal: 4),
+              child: FilterChip(
+                label: Text(_categories[index]),
+                selected: _selectedCategory == _categories[index],
+                onSelected: (selected) {
+                  setState(() {
+                    _selectedCategory = _categories[index];
+                  });
+                },
+                backgroundColor: Colors.transparent,
+                selectedColor: Theme.of(context).brightness == Brightness.dark 
+                  ? Colors.white.withOpacity(0.2) 
+                  : Colors.black.withOpacity(0.1),
+                labelStyle: TextStyle(
+                  color: _selectedCategory == _categories[index]
+                    ? Theme.of(context).brightness == Brightness.dark
+                      ? Colors.white
+                      : Colors.black
+                    : Theme.of(context).brightness == Brightness.dark
+                      ? Colors.grey[400]
+                      : Colors.grey,
+                  fontWeight: _selectedCategory == _categories[index] 
+                    ? FontWeight.bold 
+                    : FontWeight.normal,
+                ),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(20),
+                  side: BorderSide(
+                    color: _selectedCategory == _categories[index]
+                      ? Theme.of(context).brightness == Brightness.dark
+                        ? Colors.white
+                        : Colors.black
+                      : Colors.grey,
                   ),
                 ),
-              );
-            },
-          ),
+              ),
+            );
+          },
         ),
-        Expanded(
-          child: _buildContentGrid(_selectedCategory),
-        ),
-      ],
-    );
-  }
+      ),
+      Expanded(
+        child: _buildContentGrid(_selectedCategory),
+      ),
+    ],
+  );
+}
 
  Widget _buildContentGrid(String category) {
   Query query = FirebaseFirestore.instance.collection('posts')

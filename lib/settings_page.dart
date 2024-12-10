@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:provider/provider.dart';
 import 'theme_provider.dart';
+import 'privacy_settings_page.dart';
 
 class SettingsPage extends StatelessWidget {
   @override
@@ -17,7 +18,17 @@ class SettingsPage extends StatelessWidget {
       body: ListView(
         children: [
           _buildListTile(context, 'Account', Icons.person_outline),
-          _buildListTile(context, 'Privacy', Icons.lock_outline),
+          _buildListTile(
+            context, 
+            'Privacy', 
+            Icons.lock_outline,
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (context) => PrivacySettingsPage()),
+              );
+            },
+          ),
           _buildThemeToggle(context, themeProvider),
           _buildListTile(context, 'Push notifications', Icons.notifications_none),
           _buildListTile(context, 'Share profile', Icons.share_outlined),

@@ -326,35 +326,78 @@ void _showUserList(String label) {
   );
 }
 
-  Widget _buildTabBar() {
-    return DefaultTabController(
-      length: 3,
-      child: Column(
-        children: [
-TabBar(
-  tabs: [
-    Tab(icon: Icon(Icons.grid_on, 
-      color: Theme.of(context).colorScheme.onSurface)), // Update color
-    Tab(icon: Icon(Icons.bookmark_border, 
-      color: Theme.of(context).colorScheme.onSurface)), // Update color
-    Tab(icon: Icon(Icons.favorite_border, 
-      color: Theme.of(context).colorScheme.onSurface)), // Update color
-  ],
-),
-          Container(
-            height: MediaQuery.of(context).size.height * 0.5,
-            child: TabBarView(
-              children: [
-                _buildPostsGrid(),
-                _buildSavedPostsGrid(),
-                _buildLikedPostsGrid(),
+Widget _buildTabBar() {
+  return StreamBuilder<DocumentSnapshot>(
+    stream: FirebaseFirestore.instance
+        .collection('users')
+        .doc(_userId)
+        .snapshots(),
+    builder: (context, snapshot) {
+      bool isPrivateLikes = snapshot.hasData && 
+          (snapshot.data?.data() as Map<String, dynamic>?)?['isPrivateLikes'] == true;
+      bool isPrivateSaves = snapshot.hasData && 
+          (snapshot.data?.data() as Map<String, dynamic>?)?['isPrivateSaves'] == true;
+      
+      return DefaultTabController(
+        length: 3,
+        child: Column(
+          children: [
+            TabBar(
+              tabs: [
+                Tab(icon: Icon(Icons.grid_on, 
+                  color: Theme.of(context).colorScheme.onSurface)),
+                Tab(
+                  icon: Stack(
+                    clipBehavior: Clip.none,
+                    children: [
+                      Icon(Icons.bookmark_border, 
+                        color: Theme.of(context).colorScheme.onSurface),
+                      if (isPrivateSaves)
+                        Positioned(
+                          right: -4,
+                          bottom: -4,
+                          child: Icon(Icons.lock, 
+                            size: 12,
+                            color: Theme.of(context).colorScheme.onSurface),
+                        ),
+                    ],
+                  ),
+                ),
+                Tab(
+                  icon: Stack(
+                    clipBehavior: Clip.none,
+                    children: [
+                      Icon(Icons.favorite_border, 
+                        color: Theme.of(context).colorScheme.onSurface),
+                      if (isPrivateLikes)
+                        Positioned(
+                          right: -4,
+                          bottom: -4,
+                          child: Icon(Icons.lock, 
+                            size: 12,
+                            color: Theme.of(context).colorScheme.onSurface),
+                        ),
+                    ],
+                  ),
+                ),
               ],
             ),
-          ),
-        ],
-      ),
-    );
-  }
+            Container(
+              height: MediaQuery.of(context).size.height * 0.5,
+              child: TabBarView(
+                children: [
+                  _buildPostsGrid(),
+                  _buildSavedPostsGrid(),
+                  _buildLikedPostsGrid(),
+                ],
+              ),
+            ),
+          ],
+        ),
+      );
+    },
+  );
+}
 
   Widget _buildPostsGrid() {
     return StreamBuilder<QuerySnapshot>(
@@ -409,6 +452,21 @@ Widget _buildSavedPostsGrid() {
         return Center(child: CircularProgressIndicator());
       }
 
+      // Check privacy settings
+     if (_userId != currentUser?.uid && 
+    (snapshot.data?.data() as Map<String, dynamic>?)?['isPrivateSaves'] == true) {
+        return Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(Icons.lock_outline, size: 48, color: Colors.grey),
+              SizedBox(height: 16),
+              Text('This content is private'),
+            ],
+          ),
+        );
+      }
+
       var savedPosts = snapshot.data?['savedPosts'];
       List<String> postIds;
 
@@ -454,7 +512,7 @@ Widget _buildSavedPostsGrid() {
     );
   }
 
- Widget _buildLikedPostsGrid() {
+Widget _buildLikedPostsGrid() {
   return StreamBuilder<DocumentSnapshot>(
     stream: FirebaseFirestore.instance
         .collection('users')
@@ -467,6 +525,21 @@ Widget _buildSavedPostsGrid() {
 
       if (snapshot.connectionState == ConnectionState.waiting) {
         return Center(child: CircularProgressIndicator());
+      }
+
+      // Check privacy settings
+     if (_userId != currentUser?.uid && 
+    (snapshot.data?.data() as Map<String, dynamic>?)?['isPrivateLikes'] == true) {
+        return Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(Icons.lock_outline, size: 48, color: Colors.grey),
+              SizedBox(height: 16),
+              Text('This content is private'),
+            ],
+          ),
+        );
       }
 
       var likedPosts = snapshot.data?['likedPosts'];

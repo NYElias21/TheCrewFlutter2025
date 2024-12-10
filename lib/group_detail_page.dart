@@ -753,82 +753,110 @@ Future<void> _deleteNote(BuildContext context, int activityIndex, int noteIndex)
   }
 
 void _showDatePicker(BuildContext context, DateTime? currentDate) {
+  DateTime initialDateTime = currentDate ?? DateTime.now();
+  DateTime tempDateTime = initialDateTime;
+
   showModalBottomSheet(
     context: context,
     isScrollControlled: true,
     backgroundColor: Colors.transparent,
-    builder: (context) => Container(
-      padding: EdgeInsets.only(
-        bottom: MediaQuery.of(context).viewInsets.bottom,
-      ),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.vertical(top: Radius.circular(30)),
-      ),
-      child: Padding(
-        padding: EdgeInsets.symmetric(horizontal: 20),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            SizedBox(height: 20),
-            Text(
-              'Set Date',
-              style: TextStyle(
-                fontSize: 24,
-                fontWeight: FontWeight.bold,
-                color: Colors.black,
-              ),
-              textAlign: TextAlign.center,
-            ),
-            SizedBox(height: 24),
-            Container(
-              padding: EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: Colors.grey[100],
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: Colors.grey[300]!),
-              ),
-              child: CupertinoDateTextBox(
-                initialValue: currentDate ?? DateTime.now(),
-                onDateChange: (DateTime? date) async {
-                  if (date != null) {
-                    await FirebaseFirestore.instance
-                        .collection('groups')
-                        .doc(widget.groupId)
-                        .update({'date': Timestamp.fromDate(date)});
-                    Navigator.pop(context);
-                  }
-                },
-                hintText: 'Select date and time',
-              ),
-            ),
-            SizedBox(height: 24),
-            Row(
-              children: [
-                Expanded(
-                  child: TextButton(
-                    child: Text(
-                      'Cancel',
-                      style: TextStyle(
-                        color: Colors.black,
-                        fontSize: 17,
-                      ),
-                    ),
-                    style: TextButton.styleFrom(
-                      padding: EdgeInsets.symmetric(vertical: 16),
-                      side: BorderSide(color: Colors.grey[300]!),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                    ),
-                    onPressed: () => Navigator.pop(context),
-                  ),
+    builder: (context) => StatefulBuilder(
+      builder: (context, setState) => Container(
+        padding: EdgeInsets.only(
+          bottom: MediaQuery.of(context).viewInsets.bottom,
+        ),
+        decoration: BoxDecoration(
+          color: Theme.of(context).scaffoldBackgroundColor,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(30)),
+        ),
+        child: Padding(
+          padding: EdgeInsets.all(20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text(
+                'Set Date & Time',
+                style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                  fontSize: 24,
+                  fontWeight: FontWeight.bold,
                 ),
-              ],
-            ),
-            SizedBox(height: 20),
-          ],
+                textAlign: TextAlign.center,
+              ),
+              SizedBox(height: 24),
+              
+              // Selected date display
+              Container(
+                padding: EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: Theme.of(context).brightness == Brightness.dark 
+                    ? Colors.grey[900] 
+                    : Colors.grey[100],
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Text(
+                  DateFormat('EEE, MMM d @ h:mm a').format(tempDateTime),
+                  style: Theme.of(context).textTheme.bodyLarge,
+                  textAlign: TextAlign.center,
+                ),
+              ),
+              SizedBox(height: 16),
+
+              // Date picker
+              Container(
+                height: 200,
+                child: CupertinoDatePicker(
+                  mode: CupertinoDatePickerMode.dateAndTime,
+                  initialDateTime: initialDateTime,
+                  onDateTimeChanged: (DateTime dateTime) {
+                    setState(() {
+                      tempDateTime = dateTime;
+                    });
+                  },
+                ),
+              ),
+              SizedBox(height: 24),
+
+              // Action buttons
+              Row(
+                children: [
+                  Expanded(
+                    child: TextButton(
+                      onPressed: () => Navigator.pop(context),
+                      child: Text('Cancel'),
+                      style: TextButton.styleFrom(
+                        padding: EdgeInsets.symmetric(vertical: 16),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                      ),
+                    ),
+                  ),
+                  SizedBox(width: 16),
+                  Expanded(
+                    child: ElevatedButton(
+                      onPressed: () async {
+                        await FirebaseFirestore.instance
+                            .collection('groups')
+                            .doc(widget.groupId)
+                            .update({'date': Timestamp.fromDate(tempDateTime)});
+                        Navigator.pop(context);
+                      },
+                      child: Text('Save'),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Color(0xFFFFC107),
+                        foregroundColor: Colors.black,
+                        padding: EdgeInsets.symmetric(vertical: 16),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
         ),
       ),
     ),
@@ -1187,96 +1215,105 @@ void _showDateTimePicker(BuildContext context, int index, Map<String, dynamic> a
     context: context,
     isScrollControlled: true,
     backgroundColor: Colors.transparent,
-    builder: (context) => StatefulBuilder( // Add StatefulBuilder to update the UI
+    builder: (context) => StatefulBuilder(
       builder: (context, setState) => Container(
-        padding: EdgeInsets.only(
-          bottom: MediaQuery.of(context).viewInsets.bottom,
-        ),
         decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.vertical(top: Radius.circular(30)),
+          color: Theme.of(context).scaffoldBackgroundColor,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
         ),
-        child: Padding(
-          padding: EdgeInsets.symmetric(horizontal: 20),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              SizedBox(height: 20),
-              Text(
-                'Set Date & Time',
-                style: TextStyle(
-                  fontSize: 24,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.black,
-                ),
+        padding: EdgeInsets.all(16),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // Header
+            Text(
+              'Set Date & Time',
+              style: Theme.of(context).textTheme.titleLarge,
+            ),
+            SizedBox(height: 24),
+            
+            // Current selection display
+            Container(
+              padding: EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: Theme.of(context).brightness == Brightness.dark 
+                    ? Colors.grey[900] 
+                    : Colors.grey[100],
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Text(
+                DateFormat('EEE, MMM d @ h:mm a').format(tempDateTime),
+                style: Theme.of(context).textTheme.bodyLarge,
                 textAlign: TextAlign.center,
               ),
-              SizedBox(height: 24),
-              Container(
-                padding: EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: Colors.grey[100],
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: Colors.grey[300]!),
-                ),
-                child: Text(
-                  DateFormat('EEE, MMM d @ h:mm a').format(tempDateTime),
-                  style: TextStyle(fontSize: 16),
-                  textAlign: TextAlign.center,
-                ),
+            ),
+            SizedBox(height: 16),
+
+            // Date Picker
+            Container(
+              height: 200,
+              child: CupertinoDatePicker(
+                mode: CupertinoDatePickerMode.dateAndTime,
+                initialDateTime: initialDate,
+                onDateTimeChanged: (DateTime dateTime) {
+                  setState(() {
+                    tempDateTime = dateTime;
+                  });
+                },
+                backgroundColor: Theme.of(context).scaffoldBackgroundColor,
               ),
-              SizedBox(height: 16),
-              Container(
-                height: 200,
-                child: CupertinoDatePicker(
-                  mode: CupertinoDatePickerMode.dateAndTime,
-                  initialDateTime: initialDate,
-                  onDateTimeChanged: (DateTime dateTime) {
-                    setState(() {
-                      tempDateTime = dateTime;
-                    });
-                  },
-                ),
-              ),
-              SizedBox(height: 24),
-              Row(
-                children: [
-                  Expanded(
-                    child: OutlinedButton(
-                      child: Text('Cancel'),
-                      onPressed: () => Navigator.pop(context),
-                    ),
-                  ),
-                  SizedBox(width: 16),
-                  Expanded(
-                    child: ElevatedButton(
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Color(0xFFFFC107),
+            ),
+            SizedBox(height: 24),
+
+            // Action Buttons
+            Row(
+              children: [
+                // Cancel Button
+                Expanded(
+                  child: TextButton(
+                    style: TextButton.styleFrom(
+                      padding: EdgeInsets.symmetric(vertical: 16),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
                       ),
-                      child: Text('Save'),
-                      onPressed: () async {
-                        await FirebaseFirestore.instance
-                          .collection('groups')
-                          .doc(widget.groupId)
-                          .get()
-                          .then((doc) {
-                            List<dynamic> activities = List.from(doc.data()!['activities']);
-                            activities[index] = {
-                              ...activities[index],
-                              'dateTime': tempDateTime.toIso8601String(),
-                            };
-                            doc.reference.update({'activities': activities});
-                          });
-                        Navigator.pop(context);
-                      },
                     ),
+                    child: Text('Cancel'),
+                    onPressed: () => Navigator.pop(context),
                   ),
-                ],
-              ),
-              SizedBox(height: 20),
-            ],
-          ),
+                ),
+                SizedBox(width: 16),
+                // Save Button
+                Expanded(
+                  child: ElevatedButton(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Color(0xFFFFC107),
+                      foregroundColor: Colors.black,
+                      padding: EdgeInsets.symmetric(vertical: 16),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
+                    child: Text('Save'),
+                    onPressed: () async {
+                      await FirebaseFirestore.instance
+                        .collection('groups')
+                        .doc(widget.groupId)
+                        .get()
+                        .then((doc) {
+                          List<dynamic> activities = List.from(doc.data()!['activities']);
+                          activities[index] = {
+                            ...activities[index],
+                            'dateTime': tempDateTime.toIso8601String(),
+                          };
+                          doc.reference.update({'activities': activities});
+                        });
+                      Navigator.pop(context);
+                    },
+                  ),
+                ),
+              ],
+            ),
+          ],
         ),
       ),
     ),
@@ -1762,13 +1799,13 @@ child: SizedBox(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text(
-                            activity['name'] ?? '[title]',
-                            style: TextStyle(
-                              fontWeight: FontWeight.w600,
-                              fontSize: 16,
-                            ),
-                          ),
+Text(
+  activity['name'] ?? '[title]',
+  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+    fontWeight: FontWeight.w600,
+    fontSize: 16,
+  ),
+),
                           SizedBox(height: 8),
 InkWell(
   onTap: () => _showDateTimePicker(context, index, activity),
@@ -1776,7 +1813,9 @@ InkWell(
     children: [
       Icon(Icons.access_time, 
         size: 16, 
-        color: Colors.grey[600]
+        color: Theme.of(context).brightness == Brightness.dark 
+          ? Colors.white54 
+          : Colors.grey[600]
       ),
       SizedBox(width: 4),
       Expanded(
@@ -1785,18 +1824,16 @@ InkWell(
             ? DateFormat('MMM d, yyyy h:mm a')
                 .format(DateTime.parse(activity['dateTime']))
             : 'Set time/date',
-          style: TextStyle(
-            color: activity['dateTime'] != null 
-              ? Colors.black87 
-              : Colors.grey[600],
+          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
             fontSize: 14,
+            color: activity['dateTime'] != null 
+              ? Theme.of(context).brightness == Brightness.dark 
+                ? Colors.white54 
+                : Colors.black87
+              : Colors.grey[600]
           ),
         ),
       ),
-/*       Icon(Icons.chevron_right, 
-        size: 16, 
-        color: Colors.grey[600]
-      ), */
     ],
   ),
 ),
@@ -1826,22 +1863,21 @@ Container(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    'Description',
-                    style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
+Text(
+  'Description',
+  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+    fontSize: 18,
+    fontWeight: FontWeight.w600,
+  ),
+),
                   SizedBox(height: 8),
-                  Text(
-                    activity['description'],
-                    style: TextStyle(
-                      fontSize: 15,
-                      height: 1.4,
-                      color: Colors.grey[800],
-                    ),
-                  ),
+Text(
+  activity['description'],
+  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+    fontSize: 15,
+    height: 1.4,
+  ),
+),
                 ],
               ),
             ),
